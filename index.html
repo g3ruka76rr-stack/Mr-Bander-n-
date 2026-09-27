@@ -455,7 +455,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
       </div>
 
       <div class="card" style="margin-top:10px">
-        <div class="ch"><span class="dot"></span>Cuota mínima para entrar (EV ≥ +5%)</div>
+        <div class="ch"><span class="dot"></span>Cuota mínima para entrar (cuota justa × colchón)</div>
         <div class="cb" style="padding:8px 14px" id="minodds"></div>
       </div>
 
@@ -475,7 +475,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
             <tr><td>Árbitro</td><td id="d-ref"></td></tr>
             <tr><td>Ajuste contextual</td><td id="d-qual"></td></tr>
             <tr><td>λ mercado (implícito cuotas)</td><td id="d-mkt"></td></tr>
-            <tr><td>Blend mercado/modelo</td><td id="d-blend"></td></tr>
+            <tr><td>Probabilidad y colchón</td><td id="d-blend"></td></tr>
             <tr><td>Prob. liquidación</td><td id="d-probs"></td></tr>
             <tr><td>Distribución</td><td id="d-dist"></td></tr>
           </table>
@@ -1220,8 +1220,11 @@ const REF_WEIGHT = 0;
 const QUAL_MIN = 0.90, QUAL_MAX = 1.10;
 // Peso del ajuste cualitativo en λ (0 = sólo se registra). Subir sólo si la validación en Analítica lo respalda.
 const QUAL_WEIGHT = 0;
-const ALPHA = 0.40;
-const EV_MIN = 5;
+// v40 · MÉTODO TENIS: la probabilidad es 100% modelo; Bet365 sólo se usa para comparar.
+// Hay valor si  cuota justa del modelo × colchón ≤ cuota Bet365  ⇔  p·cuota ≥ colchón  ⇔  EV bruto ≥ overround,
+// con colchón = 1/cuotaOver + 1/cuotaUnder (overround real de ese mercado). El edge y el Kelly ¼ van sobre la cuota bruta.
+const ALPHA = 1.0;
+const EV_MIN = 5;   // sólo como referencia cuando no hay cuotas de ambos lados
 
 function logGamma(z) {
   const g = 7;
@@ -1507,17 +1510,20 @@ function computeModel(inp) {
     evO = evOf(outO) * 100; evU = evOf(outU) * 100;
     if (lamMkt !== null) { const pm = buildPMF(lamMkt); margin = -evOf(outcomes(pm, ht, linea, 'O', oddO)) * 100; }
   }
+  const col = hasOdds ? 1 / oddO + 1 / oddU : null;          // colchón dinámico (overround real)
+  const thr = hasOdds ? Math.max(0, (col - 1) * 100) : EV_MIN; // umbral de EV bruto en %
   let side = 'N', bestEV = 0, bestOdd = 0, outs = null;
-  if (hasOdds && evO >= EV_MIN && evO >= evU) { side = 'O'; bestEV = evO; bestOdd = oddO; outs = outO; }
-  else if (hasOdds && evU >= EV_MIN)          { side = 'U'; bestEV = evU; bestOdd = oddU; outs = outU; }
+  if (hasOdds && evO >= thr && evO >= evU) { side = 'O'; bestEV = evO; bestOdd = oddO; outs = outO; }
+  else if (hasOdds && evU >= thr)          { side = 'U'; bestEV = evU; bestOdd = oddU; outs = outU; }
   const kellyFrac = outs ? kellyQuarter(outs) : 0;
   return {ht, B, G, mh, ma, str, refEff, qEff, Eel, Erem, paceMult, lamL: Erem.EL * paceMult, lamV: Erem.EV * paceMult,
           lamModel, lamMkt, lam, margin, pmf, pmfMean: mean, pmfVar: vr, spO, spU, evO, evU,
-          fO: spO ? fairOdd(spO) : null, fU: spU ? fairOdd(spU) : null, hasOdds, rEff, side, bestEV, bestOdd, kellyFrac, lvl: stakeLevel(bestEV),
+          fO: spO ? fairOdd(spO) : null, fU: spU ? fairOdd(spU) : null, hasOdds, rEff, side, bestEV, bestOdd, kellyFrac, col, thr,
+          lvl: side === 'N' ? 0 : Math.max(1, stakeLevel(bestEV)),
           nRemaining: remaining.reduce((s, u) => s + u.w, 0)};
 }
 
-// Cuota mínima de Bet365 para que la app dé EV ≥ EV_MIN en una línea x.5, con la MISMA regla (mezcla alpha + umbral).
+// Cuota mínima de Bet365 para que la app dé valor en una línea x.5, con la MISMA regla (EV bruto ≥ colchón).
 // La cuota del lado contrario se supone con el margen típico 'margin'. Distribución: NB(λ mezcla, forma del modelo).
 function nbTailOver(lam, r, need) {       // P(X ≥ need)
   if (need <= 0) return 1;
@@ -1535,7 +1541,7 @@ function minEntryOdds(lamModel, rEff, ht, L, side, margin = 0.06, alpha = ALPHA)
     const lam = alpha * lamModel + (1 - alpha) * lk, pO = nbTailOver(lam, rEff, need);
     return (side === 'O' ? pO : 1 - pO) * x - 1;
   };
-  const target = EV_MIN / 100; let lo = 1.01, hi = Math.min(50, 0.995 / margin);   // por encima, la otra cuota sería < 1
+  const target = margin; let lo = 1.01, hi = Math.min(50, 0.995 / margin);   // por encima, la otra cuota sería < 1
   if (ev(hi) < target) return null;
   for (let i = 0; i < 32; i++) { const m = (lo + hi) / 2; ev(m) >= target ? hi = m : lo = m; }
   return hi;
@@ -1979,7 +1985,7 @@ function onTeamChange() {
   } else hint.hidden = true;
 }
 
-// Tabla «cuota mínima para entrar» (misma regla: mezcla 40/60 + EV ≥ +5%)
+// Tabla «cuota mínima para entrar» (misma regla: cuota justa × colchón)
 function renderMinOdds(M, linea, oO, oU) {
   const el = document.getElementById('minodds'); if (!el) return;
   const margin = oO && oU ? Math.max(0.02, 1/oO + 1/oU - 1) : 0.06;
@@ -1992,7 +1998,7 @@ function renderMinOdds(M, linea, oO, oU) {
     const mo = minEntryOdds(M.lamModel, M.rEff, M.ht, L, 'O', margin), mu = minEntryOdds(M.lamModel, M.rEff, M.ht, L, 'U', margin);
     const hit = (L === linea && oO && mo && oO >= mo) ? ' style="color:var(--win)"' : '', hitU = (L === linea && oU && mu && oU >= mu) ? ' style="color:var(--win)"' : '';
     return `<tr><td>Línea ${L}${L === linea && oO ? ' (la tuya)' : ''}</td><td><span${hit}>Over ≥ ${f(mo)}</span> · <span${hitU}>Under ≥ ${f(mu)}</span></td></tr>`;
-  }).join('') + `</table><div class="note" style="margin-top:8px">Cuota de Bet365 a partir de la cual la app daría valor. Supone un margen de Bet365 del ${(margin*100).toFixed(1)}%${oO && oU ? ' (el de tus cuotas)' : ' (típico)'} · aproximación, la decisión final es el EV exacto de arriba.</div>`;
+  }).join('') + `</table><div class="note" style="margin-top:8px">Cuota de Bet365 a partir de la cual hay valor: cuota justa del modelo × colchón ${(1+margin).toFixed(3)}${oO && oU ? ' (overround de tus cuotas)' : ' (típico)'}. La decisión final es el EV exacto de arriba.</div>`;
 }
 
 function analyze(mode) {
@@ -2105,7 +2111,7 @@ function analyze(mode) {
     const fo = v => v === null ? '—' : isFinite(v) ? v.toFixed(3) : '∞';
     document.getElementById('st-fo').textContent = fo(M.fO);
     document.getElementById('st-fu').textContent = fo(M.fU);
-    const cls = v => v === null ? 'sv' : v>=EV_MIN?'sv ok':v>=0?'sv wn':'sv bad';
+    const cls = v => v === null ? 'sv' : v>=M.thr?'sv ok':v>=0?'sv wn':'sv bad';
     const voEl = document.getElementById('st-vo'), vuEl = document.getElementById('st-vu');
     voEl.textContent = f1(M.evO); voEl.className = cls(M.evO);
     vuEl.textContent = f1(M.evU); vuEl.className = cls(M.evU);
@@ -2140,6 +2146,7 @@ function analyze(mode) {
     qualEl.style.color = M.qEff!==1 ? 'var(--wn)' : '';
     document.getElementById('d-mkt').textContent = !M.hasOdds ? (stale ? 'Cuotas caducadas' : 'Sin cuotas') : M.lamMkt===null ? 'Mercado ya decidido' : `λ ${M.lamMkt.toFixed(3)} · margen Bet365 ${M.margin.toFixed(2)}%`;
     document.getElementById('d-blend').textContent = M.lamMkt===null ? `100% modelo = ${M.lam.toFixed(2)}`
+      : ALPHA === 1 ? `100% modelo = ${M.lam.toFixed(2)} · Bet365 (sólo comparación) ${M.lamMkt.toFixed(2)} · colchón ${M.col.toFixed(3)} → valor si EV ≥ +${M.thr.toFixed(1)}%`
       : `${ALPHA*100}%×modelo(${M.lamModel.toFixed(2)}) + ${(1-ALPHA)*100}%×mercado(${M.lamMkt.toFixed(2)}) = ${M.lam.toFixed(2)}`;
     const pct = v => (v*100).toFixed(1) + '%', sp = M.spO;
     document.getElementById('d-probs').textContent = !sp ? '—' :
