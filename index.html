@@ -931,11 +931,11 @@ const LEAGUES = {
   s2: {name: 'Hypermotion', short: 'Segunda', full: 'LaLiga Hypermotion (Segunda División de España)', db: DB_S2, lg: LG_S2, goals: GOALS_S2, refs: DB_REFS_S2,
        lf: [1, 1], fs: 'SPAIN: LaLiga2', check: 'validada al descanso (391 partidos, +2%)', tags: '#Hypermotion #LaLiga2 #Corners', mention: '@LaLiga2'},
   E0: {name: 'Premier', short: 'Premier', full: 'Premier League (Inglaterra)', db: DB_E0, lg: LG_E0, goals: GOALS_E0, refs: {},
-       lf: [1, 1], fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · sin factor', tags: '#PremierLeague #Corners', mention: '@premierleague'},
+       lf: [1.032, 1.032], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.032 · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
   I1: {name: 'Serie A', short: 'Serie A', full: 'Serie A (Italia)', db: DB_I1, lg: LG_I1, goals: GOALS_I1, refs: {},
-       lf: [0.961, 0.961], fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · factor 0.961', tags: '#SerieA #Corners', mention: '@SerieA'},
+       lf: [0.988, 0.988], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×0.988 · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
   D1: {name: 'Bundesliga', short: 'Bundesliga', full: 'Bundesliga (Alemania)', db: DB_D1, lg: LG_D1, goals: GOALS_D1, refs: {},
-       lf: [0.984, 1.038], fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · factor 0.984 / 1.038 · su nivel varía entre temporadas',
+       lf: [1.004, 1.059], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
        warn: true, tags: '#Bundesliga #Corners', mention: '@Bundesliga'},
 };
 const ligaShort = l => LEAGUES[l] ? LEAGUES[l].short : l === 'man' ? 'Manual' : 'Otra';
@@ -1225,6 +1225,20 @@ const QUAL_WEIGHT = 0;
 // con colchón = 1/cuotaOver + 1/cuotaUnder (overround real de ese mercado). El edge y el Kelly ¼ van sobre la cuota bruta.
 const ALPHA = 1.0;
 const EV_MIN = 5;   // sólo como referencia cuando no hay cuotas de ambos lados
+// v42 · PROTOCOLO DE ENTRADA (backtest de 2.493 partidos minuto a minuto; ver conversación 27-9-2026)
+const STAKE_CAP = 0.02;                 // tope por apuesta hasta validar con ~40 apuestas registradas
+const PROTO_BAL_LEAGUES = ['E0', 'D1']; // prepartido igualado: hay 5–6% más córners de lo que dice el modelo
+function protocolRule(p) {              // p: {side, minuto, gL, gV, rL, rV, gap, has1x2, liga}
+  const m = p.minuto, d = p.gL - p.gV, ad = Math.abs(d), h2 = m >= 45;
+  if (p.side === 'O' && h2 && ad >= 2) return {block: 'ventaja de 2+ goles en la 2ª parte: hay menos córners de lo que parece, el Over no se apuesta'};
+  if (p.side === 'U' && m >= 75 && d === -1) return {block: 'visitante ganando por 1 desde el 75\': el local aprieta, el Under no se apuesta'};
+  if (p.side === 'U' && m === 0 && PROTO_BAL_LEAGUES.includes(p.liga) && p.has1x2 && p.gap < 0.15)
+    return {block: 'prepartido igualado en Premier/Bundesliga: salen más córners de lo esperado, el Under no se apuesta'};
+  let extra = 0; const why = [];
+  if (p.side === 'U' && h2 && ad === 1) { extra += 4; why.push('ventaja de 1 en la 2ª parte'); }
+  if (p.rL || p.rV) { extra += 5; why.push('hay roja'); }
+  return {extra, why};
+}
 
 function logGamma(z) {
   const g = 7;
@@ -1293,7 +1307,7 @@ function kellyFull(outs) {
   for (let i = 0; i < 100; i++) { const mid = (lo + hi) / 2; d(mid) > 0 ? lo = mid : hi = mid; }
   return (lo + hi) / 2;
 }
-function kellyQuarter(outs) { return Math.min(kellyFull(outs) * 0.25, 0.05); }
+function kellyQuarter(outs) { return Math.min(kellyFull(outs) * 0.25, STAKE_CAP); }
 // λ implícito del mercado: EV_Over(λ) = EV_Under(λ)  (en x.5 = des-vig proporcional exacto)
 function marketLambda(ht, L, oO, oU) {
   const f = lam => { const pmf = buildPMF(lam);
@@ -1384,7 +1398,9 @@ function splitUnits(minuto) {
 }
 
 // ── Intensidad de un equipo en una unidad ─────────────────────────────────────
-function teamEta(base, isHome, dif, u, nown, nopp, str) {
+// v41: sx = ajustes validados fuera de muestra sólo en Premier/Serie A/Bundesliga (en LaLiga no mejoran: ×0.97 / ×1.02, IC incluye 1)
+//   local perdiendo por 2+ ×0.841 · visitante ganando por 2+ ×0.845 (2.493 partidos; test temporal +5 logL, dejando-una-liga +8)
+function teamEta(base, isHome, dif, u, nown, nopp, str, sx) {
   const late = u.half === 2 && u.min >= LATE_MIN;
   let e = COEF.const + COEF.lb * Math.log(base) + COEF[u.bin] + (isHome ? COEF.home : 0) + COEF.str * str;
   if (dif <= -2) e += COEF.dm2 + (late ? COEF.dm2_late : 0);
@@ -1392,13 +1408,14 @@ function teamEta(base, isHome, dif, u, nown, nopp, str) {
   else if (dif === 1) e += COEF.dp1 + (late ? COEF.dp1_late : 0);
   else if (dif >= 2) e += COEF.dp2 + (late ? COEF.dp2_late : 0);
   if (nown > nopp) e += COEF.up; else if (nown < nopp) e += COEF.down;
+  if (sx) { if (isHome && dif <= -2) e += sx.dm2_home; if (!isHome && dif >= 2) e += sx.dp2_away; }
   return e;
 }
 // intensidad total por estado de marcador (dif = goles local − visitante)
 function unitRates(ctx, u, dif) {
   const lf = ctx.lf ? ctx.lf[u.half - 1] : 1;   // factor de nivel de la liga (1ª / 2ª parte)
-  const lh = Math.exp(teamEta(ctx.baseL, true, dif, u, 11 - ctx.rL, 11 - ctx.rV, ctx.str)) * u.w * lf;
-  const la = Math.exp(teamEta(ctx.baseV, false, -dif, u, 11 - ctx.rV, 11 - ctx.rL, -ctx.str)) * u.w * lf;
+  const lh = Math.exp(teamEta(ctx.baseL, true, dif, u, 11 - ctx.rL, 11 - ctx.rV, ctx.str, ctx.sx)) * u.w * lf;
+  const la = Math.exp(teamEta(ctx.baseV, false, -dif, u, 11 - ctx.rV, 11 - ctx.rL, -ctx.str, ctx.sx)) * u.w * lf;
   return {lh, la};
 }
 
@@ -1484,7 +1501,7 @@ function computeModel(inp) {
   const str = G ? G.pH - G.pA : 0;
   const refEff = 1 + (refMult - 1) * REF_WEIGHT;
   const qEff = 1 + (Math.min(QUAL_MAX, Math.max(QUAL_MIN, qualMult)) - 1) * QUAL_WEIGHT;
-  const ctx = {baseL: B.baseL * refEff * qEff, baseV: B.baseV * refEff * qEff, rL, rV, str, mh, ma, lf: inp.leagueF || null};
+  const ctx = {baseL: B.baseL * refEff * qEff, baseV: B.baseV * refEff * qEff, rL, rV, str, mh, ma, lf: inp.leagueF || null, sx: inp.leagueSX || null};
 
   const {elapsed, remaining} = splitUnits(minuto);
   // esperado transcurrido (desde 0-0, 11 v 11; el camino real del marcador no se conoce)
@@ -1512,13 +1529,26 @@ function computeModel(inp) {
   }
   const col = hasOdds ? 1 / oddO + 1 / oddU : null;          // colchón dinámico (overround real)
   const thr = hasOdds ? Math.max(0, (col - 1) * 100) : EV_MIN; // umbral de EV bruto en %
+  const pin = {minuto, gL, gV, rL, rV, gap: G ? Math.abs(G.pH - G.pA) : null, has1x2: !!G, liga: inp.liga || null};
+  const chk = s => { const r = protocolRule({...pin, side: s}); return r.block ? {ok: false, req: Infinity, block: r.block} : {ok: true, req: thr + r.extra, extra: r.extra, why: r.why}; };
+  const proto = hasOdds ? {O: chk('O'), U: chk('U')} : null;
+  const okO = hasOdds && evO >= proto.O.req, okU = hasOdds && evU >= proto.U.req;
   let side = 'N', bestEV = 0, bestOdd = 0, outs = null;
-  if (hasOdds && evO >= thr && evO >= evU) { side = 'O'; bestEV = evO; bestOdd = oddO; outs = outO; }
-  else if (hasOdds && evU >= thr)          { side = 'U'; bestEV = evU; bestOdd = oddU; outs = outU; }
+  if (okO && (!okU || evO >= evU)) { side = 'O'; bestEV = evO; bestOdd = oddO; outs = outO; }
+  else if (okU)                    { side = 'U'; bestEV = evU; bestOdd = oddU; outs = outU; }
+  let protoNote = '';
+  if (hasOdds && side === 'N') {
+    for (const [s, ev, nm] of [['O', evO, 'Over'], ['U', evU, 'Under']]) {
+      if (ev < thr) continue;
+      const P = proto[s];
+      protoNote += (protoNote ? ' · ' : '') + (P.block ? `${nm} ${ev >= 0 ? '+' : ''}${ev.toFixed(1)}% bloqueado: ${P.block}`
+        : `${nm} ${ev >= 0 ? '+' : ''}${ev.toFixed(1)}% no llega: con ${P.why.join(' y ')} se exige +${P.req.toFixed(1)}%`);
+    }
+  }
   const kellyFrac = outs ? kellyQuarter(outs) : 0;
   return {ht, B, G, mh, ma, str, refEff, qEff, Eel, Erem, paceMult, lamL: Erem.EL * paceMult, lamV: Erem.EV * paceMult,
           lamModel, lamMkt, lam, margin, pmf, pmfMean: mean, pmfVar: vr, spO, spU, evO, evU,
-          fO: spO ? fairOdd(spO) : null, fU: spU ? fairOdd(spU) : null, hasOdds, rEff, side, bestEV, bestOdd, kellyFrac, col, thr,
+          fO: spO ? fairOdd(spO) : null, fU: spU ? fairOdd(spU) : null, hasOdds, rEff, side, bestEV, bestOdd, kellyFrac, col, thr, pin, proto, protoNote,
           lvl: side === 'N' ? 0 : Math.max(1, stakeLevel(bestEV)),
           nRemaining: remaining.reduce((s, u) => s + u.w, 0)};
 }
@@ -1531,7 +1561,7 @@ function nbTailOver(lam, r, need) {       // P(X ≥ need)
   for (let k = 1; k < need; k++) { t *= (r + k - 1) / k * q; c += t; }
   return Math.max(0, 1 - c);
 }
-function minEntryOdds(lamModel, rEff, ht, L, side, margin = 0.06, alpha = ALPHA) {
+function minEntryOdds(lamModel, rEff, ht, L, side, margin = 0.06, alpha = ALPHA, extra = 0) {
   const need = Math.floor(L - ht) + 1;   // córners más para el Over en línea x.5
   if (need <= 0) return null;
   const ev = x => {
@@ -1541,7 +1571,7 @@ function minEntryOdds(lamModel, rEff, ht, L, side, margin = 0.06, alpha = ALPHA)
     const lam = alpha * lamModel + (1 - alpha) * lk, pO = nbTailOver(lam, rEff, need);
     return (side === 'O' ? pO : 1 - pO) * x - 1;
   };
-  const target = margin; let lo = 1.01, hi = Math.min(50, 0.995 / margin);   // por encima, la otra cuota sería < 1
+  const target = margin + extra / 100; let lo = 1.01, hi = Math.min(50, 0.995 / margin);   // por encima, la otra cuota sería < 1
   if (ev(hi) < target) return null;
   for (let i = 0; i < 32; i++) { const m = (lo + hi) / 2; ev(m) >= target ? hi = m : lo = m; }
   return hi;
@@ -1874,7 +1904,7 @@ function tabModelInputs(t) {
   return {inp: {hf: ld[0], haf: ld[1], vf: vd[2], vaf: vd[3], lg: L.lg, goalsLg: L.goals, odds1x2: has1x2 ? o1 : null,
     minuto: Math.max(0, Math.min(105, parseInt(f.minuto) || 0)), gL: i('g-loc'), gV: i('g-vis'), cL, cV,
     rL: Math.min(3, i('r-loc')), rV: Math.min(3, i('r-vis')), linea: oddsOk ? linea : NaN, oddO: oddsOk ? oO : NaN, oddU: oddsOk ? oU : NaN,
-    refMult: rn && refDB2[rn] ? refDB2[rn] : 1, qualMult, leagueF: L.lf}, has1x2, stale};
+    refMult: rn && refDB2[rn] ? refDB2[rn] : 1, qualMult, leagueF: L.lf, leagueSX: L.sx || null, liga}, has1x2, stale};
 }
 function evaluateTab(t) {
   const X = tabModelInputs(t); if (!X) return null;
@@ -1993,12 +2023,13 @@ function renderMinOdds(M, linea, oO, oU) {
   const lines = [0, 1, 2].map(k => M.ht + k0 + k + 0.5);
   if (linea !== null && Math.abs(linea % 1 - 0.5) < 1e-9 && linea > M.ht && !lines.includes(linea)) lines.push(linea);
   lines.sort((a, b) => a - b);
-  const f = x => x ? x.toFixed(2) : '—';
+  const f = x => x ? x.toFixed(2) : 'no';
   el.innerHTML = `<table class="dt">` + lines.map(L => {
-    const mo = minEntryOdds(M.lamModel, M.rEff, M.ht, L, 'O', margin), mu = minEntryOdds(M.lamModel, M.rEff, M.ht, L, 'U', margin);
+    const rO = protocolRule({...M.pin, side: 'O'}), rU = protocolRule({...M.pin, side: 'U'});
+    const mo = rO.block ? null : minEntryOdds(M.lamModel, M.rEff, M.ht, L, 'O', margin, ALPHA, rO.extra), mu = rU.block ? null : minEntryOdds(M.lamModel, M.rEff, M.ht, L, 'U', margin, ALPHA, rU.extra);
     const hit = (L === linea && oO && mo && oO >= mo) ? ' style="color:var(--win)"' : '', hitU = (L === linea && oU && mu && oU >= mu) ? ' style="color:var(--win)"' : '';
     return `<tr><td>Línea ${L}${L === linea && oO ? ' (la tuya)' : ''}</td><td><span${hit}>Over ≥ ${f(mo)}</span> · <span${hitU}>Under ≥ ${f(mu)}</span></td></tr>`;
-  }).join('') + `</table><div class="note" style="margin-top:8px">Cuota de Bet365 a partir de la cual hay valor: cuota justa del modelo × colchón ${(1+margin).toFixed(3)}${oO && oU ? ' (overround de tus cuotas)' : ' (típico)'}. La decisión final es el EV exacto de arriba.</div>`;
+  }).join('') + `</table><div class="note" style="margin-top:8px">Cuota de Bet365 a partir de la cual la app dice ENTRAR (incluye el protocolo: «no» = prohibido en este marcador): cuota justa del modelo × colchón ${(1+margin).toFixed(3)}${oO && oU ? ' (overround de tus cuotas)' : ' (típico)'}. La decisión final es el EV exacto de arriba.</div>`;
 }
 
 function analyze(mode) {
@@ -2046,7 +2077,7 @@ function analyze(mode) {
 
   const M = computeModel({hf, haf, vf, vaf, lg, goalsLg, odds1x2: has1x2 ? o1 : null, minuto,
                           gL, gV, cL, cV, rL, rV, linea: lineaOk ? linea : NaN, oddO: oddsOk ? oddO : NaN, oddU: oddsOk ? oddU : NaN, refMult, qualMult,
-                          leagueF: LEAGUES[liga] ? LEAGUES[liga].lf : null});
+                          leagueF: LEAGUES[liga] ? LEAGUES[liga].lf : null, leagueSX: LEAGUES[liga] ? (LEAGUES[liga].sx || null) : null, liga});
   const {side, bestEV, bestOdd, kellyFrac, lvl} = M;
   const kellyPct = +(kellyFrac*100).toFixed(2), stakeEur = Math.round(banca * kellyFrac);
   lastLvl = lvl; lastSide = side; lastKellyFrac = kellyFrac;
@@ -2091,13 +2122,14 @@ function analyze(mode) {
     rec.className = 'rec ' + (side==='O'?'rec-o':side==='U'?'rec-u':'rec-n');
     const f1 = v => v === null || !isFinite(v) ? '—' : (v>=0?'+':'') + v.toFixed(1) + '%';
     document.getElementById('rec-main').textContent = !M.hasOdds ? (stale ? 'CUOTAS CADUCADAS' : 'FALTAN CUOTAS')
-      : side==='O'?`OVER ${linea}`:side==='U'?`UNDER ${linea}`:'SIN VALOR';
+      : side==='O'?`OVER ${linea}`:side==='U'?`UNDER ${linea}`:M.protoNote?'NO ENTRAR':'SIN VALOR';
     document.getElementById('rec-sub').textContent = !M.hasOdds
       ? (stale ? 'Ha habido córner desde que metiste línea y cuotas: actualízalas' : 'Mete línea y cuotas Over/Under · abajo tienes la cuota mínima para entrar')
-      : side!=='N' ? `EV ${f1(bestEV)}  ·  Cuota ${bestOdd}  ·  Stake nivel ${lvl}` : `Over: ${f1(M.evO)}  ·  Under: ${f1(M.evU)}`;
+      : side!=='N' ? `EV ${f1(bestEV)}  ·  Cuota ${bestOdd}  ·  Stake nivel ${lvl}${M.proto[side].extra ? `  ·  protocolo: ${M.proto[side].why.join(' y ')}, exigido +${M.proto[side].req.toFixed(1)}%` : ''}`
+        : M.protoNote ? `NO ENTRAR · ${M.protoNote}` : `Over: ${f1(M.evO)}  ·  Under: ${f1(M.evU)}  ·  ninguno llega al colchón (+${M.thr.toFixed(1)}%)`;
     const skEl = document.getElementById('sk');
     if (side!=='N') { skEl.hidden = false;
-      document.getElementById('sk-lvl').textContent = `¼ Kelly exacto  ·  ${kellyPct}% de banca  (Nivel ${lvl})`;
+      document.getElementById('sk-lvl').textContent = `¼ Kelly exacto  ·  ${kellyPct}% de banca${kellyFrac >= STAKE_CAP - 1e-9 ? ` (tope ${STAKE_CAP*100}%)` : ''}  (Nivel ${lvl})`;
       document.getElementById('sk-eur').textContent = `€${stakeEur}`; } else skEl.hidden = true;
     document.getElementById('bet-action-row').hidden = (side === 'N');
     document.getElementById('bet-action-row').style.display = side !== 'N' ? 'flex' : 'none';
