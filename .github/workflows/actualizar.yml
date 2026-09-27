@@ -1,0 +1,27 @@
+name: Actualizar base CornerEdge
+on:
+  schedule:
+    - cron: '0 6 * * 2'
+    - cron: '0 6 * * 5'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+jobs:
+  base:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar resultados y recalcular la base
+        run: python3 actualizar_base.py index.html --salida index.html
+      - name: Guardar y publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet index.html; then echo "Sin partidos nuevos"; exit 0; fi
+          git config user.name "CornerEdge bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html
+          git commit -m "Base actualizada"
+          git push
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
