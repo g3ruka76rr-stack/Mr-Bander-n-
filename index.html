@@ -237,7 +237,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 <body>
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
 <header class="hdr">
-  <div class="logo">Corner<em>Edge</em></div>
+  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v44</span></div>
   <div class="hdr-right">
     <div class="banca-row">
       <label for="banca">Banca</label>
@@ -927,15 +927,15 @@ let sortCol = 'fecha', sortDir = -1;
 // ─────────────────────────────────────────────────────────────────────────────
 const LEAGUES = {
   ll: {name: 'LaLiga', short: 'La Liga', full: 'LaLiga EA Sports (Primera División de España)', db: DB_LL, lg: LG_LL, goals: GOALS_LL, refs: DB_REFS_LL,
-       lf: [1, 1], fs: 'SPAIN: LaLiga', check: 'modelo estimado aquí (639 partidos)', tags: '#LaLiga #Corners', mention: '@LaLiga'},
+       lf: [1, 1], rf: 40, fs: 'SPAIN: LaLiga', check: 'modelo estimado aquí (639 partidos)', tags: '#LaLiga #Corners', mention: '@LaLiga'},
   s2: {name: 'Hypermotion', short: 'Segunda', full: 'LaLiga Hypermotion (Segunda División de España)', db: DB_S2, lg: LG_S2, goals: GOALS_S2, refs: DB_REFS_S2,
-       lf: [1, 1], fs: 'SPAIN: LaLiga2', check: 'validada al descanso (391 partidos, +2%)', tags: '#Hypermotion #LaLiga2 #Corners', mention: '@LaLiga2'},
+       lf: [1, 1], rf: 40, fs: 'SPAIN: LaLiga2', check: 'validada al descanso (391 partidos, +1,5%) · reacción al ritmo r=40', tags: '#Hypermotion #LaLiga2 #Corners', mention: '@LaLiga2'},
   E0: {name: 'Premier', short: 'Premier', full: 'Premier League (Inglaterra)', db: DB_E0, lg: LG_E0, goals: GOALS_E0, refs: {},
-       lf: [1.032, 1.032], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.032 · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
+       lf: [1.032, 1.032], rf: 150, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.032 · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
   I1: {name: 'Serie A', short: 'Serie A', full: 'Serie A (Italia)', db: DB_I1, lg: LG_I1, goals: GOALS_I1, refs: {},
-       lf: [0.988, 0.988], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×0.988 · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
+       lf: [0.988, 0.988], rf: 70, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×0.988 · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
   D1: {name: 'Bundesliga', short: 'Bundesliga', full: 'Bundesliga (Alemania)', db: DB_D1, lg: LG_D1, goals: GOALS_D1, refs: {},
-       lf: [1.004, 1.059], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
+       lf: [1.004, 1.059], rf: 50, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
        warn: true, tags: '#Bundesliga #Corners', mention: '@Bundesliga'},
 };
 const ligaShort = l => LEAGUES[l] ? LEAGUES[l].short : l === 'man' ? 'Manual' : 'Otra';
@@ -1510,7 +1510,8 @@ function computeModel(inp) {
   const d0 = Math.max(-DMAX + 1, Math.min(DMAX - 1, gL - gV));
   const Erem = chainMean(ctx, remaining, d0);
   // posterior del nivel del partido: Gamma(r + córners vistos, r + esperados vistos)
-  const a = R_FRAIL + (minuto > 0 ? ht : 0), b = R_FRAIL + (minuto > 0 ? Eel : 0);
+  const RF = inp.rFrail || R_FRAIL;   // v44: reacción al ritmo por liga (máx. verosimilitud en 7.479 momentos de 2.493 partidos + 391 de Hypermotion): LaLiga 40, Hypermotion 40, Premier 150, Serie A 70, Bundesliga 50
+  const a = RF + (minuto > 0 ? ht : 0), b = RF + (minuto > 0 ? Eel : 0);
   const paceMult = a / b;
   const lamModel = Erem.E * paceMult;
   const lamMkt = hasOdds ? marketLambda(ht, linea, oddO, oddU) : null;
@@ -1548,7 +1549,7 @@ function computeModel(inp) {
   const kellyFrac = outs ? kellyQuarter(outs) : 0;
   return {ht, B, G, mh, ma, str, refEff, qEff, Eel, Erem, paceMult, lamL: Erem.EL * paceMult, lamV: Erem.EV * paceMult,
           lamModel, lamMkt, lam, margin, pmf, pmfMean: mean, pmfVar: vr, spO, spU, evO, evU,
-          fO: spO ? fairOdd(spO) : null, fU: spU ? fairOdd(spU) : null, hasOdds, rEff, side, bestEV, bestOdd, kellyFrac, col, thr, pin, proto, protoNote,
+          fO: spO ? fairOdd(spO) : null, fU: spU ? fairOdd(spU) : null, hasOdds, rEff, side, bestEV, bestOdd, kellyFrac, col, thr, pin, proto, protoNote, RF,
           lvl: side === 'N' ? 0 : Math.max(1, stakeLevel(bestEV)),
           nRemaining: remaining.reduce((s, u) => s + u.w, 0)};
 }
@@ -1904,7 +1905,7 @@ function tabModelInputs(t) {
   return {inp: {hf: ld[0], haf: ld[1], vf: vd[2], vaf: vd[3], lg: L.lg, goalsLg: L.goals, odds1x2: has1x2 ? o1 : null,
     minuto: Math.max(0, Math.min(105, parseInt(f.minuto) || 0)), gL: i('g-loc'), gV: i('g-vis'), cL, cV,
     rL: Math.min(3, i('r-loc')), rV: Math.min(3, i('r-vis')), linea: oddsOk ? linea : NaN, oddO: oddsOk ? oO : NaN, oddU: oddsOk ? oU : NaN,
-    refMult: rn && refDB2[rn] ? refDB2[rn] : 1, qualMult, leagueF: L.lf, leagueSX: L.sx || null, liga}, has1x2, stale};
+    refMult: rn && refDB2[rn] ? refDB2[rn] : 1, qualMult, leagueF: L.lf, leagueSX: L.sx || null, rFrail: L.rf || null, liga}, has1x2, stale};
 }
 function evaluateTab(t) {
   const X = tabModelInputs(t); if (!X) return null;
@@ -2077,7 +2078,7 @@ function analyze(mode) {
 
   const M = computeModel({hf, haf, vf, vaf, lg, goalsLg, odds1x2: has1x2 ? o1 : null, minuto,
                           gL, gV, cL, cV, rL, rV, linea: lineaOk ? linea : NaN, oddO: oddsOk ? oddO : NaN, oddU: oddsOk ? oddU : NaN, refMult, qualMult,
-                          leagueF: LEAGUES[liga] ? LEAGUES[liga].lf : null, leagueSX: LEAGUES[liga] ? (LEAGUES[liga].sx || null) : null, liga});
+                          leagueF: LEAGUES[liga] ? LEAGUES[liga].lf : null, leagueSX: LEAGUES[liga] ? (LEAGUES[liga].sx || null) : null, rFrail: LEAGUES[liga] ? (LEAGUES[liga].rf || null) : null, liga});
   const {side, bestEV, bestOdd, kellyFrac, lvl} = M;
   const kellyPct = +(kellyFrac*100).toFixed(2), stakeEur = Math.round(banca * kellyFrac);
   lastLvl = lvl; lastSide = side; lastKellyFrac = kellyFrac;
@@ -2101,7 +2102,7 @@ function analyze(mode) {
     liga: ligaShort(liga), local: locName, visit: visName, minuto, gL, gV, rL, rV, cL, cV,
     linea, oddO, oddU, o1: has1x2 ? o1[0] : '', ox: has1x2 ? o1[1] : '', o2: has1x2 ? o1[2] : '',
     lamModel: +M.lamModel.toFixed(4), lamMkt: M.lamMkt!==null ? +M.lamMkt.toFixed(4) : '', lamFinal: +M.lam.toFixed(4),
-    shape: +(R_FRAIL + (minuto>0?M.ht:0)).toFixed(2), eel: +M.Eel.toFixed(4),
+    shape: +(M.RF + (minuto>0?M.ht:0)).toFixed(2), eel: +M.Eel.toFixed(4),
     pOver: +(M.spO.W + M.spO.HW).toFixed(4), pUnder: +(M.spU.W + M.spU.HW).toFixed(4),
     evO: +M.evO.toFixed(2), evU: +M.evU.toFixed(2), side, final: '',
   });
@@ -2167,7 +2168,7 @@ function analyze(mode) {
     document.getElementById('d-lam2').textContent = `${M.lamL.toFixed(2)} + ${M.lamV.toFixed(2)} = ${M.lamModel.toFixed(2)}`;
     const paceEl = document.getElementById('d-pace');
     paceEl.textContent = minuto===0 ? 'Prepartido — sin información aún'
-      : `${M.ht} vistos / ${M.Eel.toFixed(2)} esperados → nivel ×${M.paceMult.toFixed(3)} (gamma r=${R_FRAIL})`;
+      : `${M.ht} vistos / ${M.Eel.toFixed(2)} esperados → nivel ×${M.paceMult.toFixed(3)} (gamma r=${M.RF})`;
     paceEl.style.color = Math.abs(M.paceMult-1) > 0.02 ? 'var(--wn)' : '';
     const refEl = document.getElementById('d-ref');
     refEl.textContent = refName ? `${refName} ×${refMult.toFixed(2)} · peso ${REF_WEIGHT} → ×${M.refEff.toFixed(3)}` : 'No especificado';
@@ -2184,7 +2185,7 @@ function analyze(mode) {
     document.getElementById('d-probs').textContent = !sp ? '—' :
       `Over: gana ${pct(sp.W)}${sp.HW>0?` · ½gana ${pct(sp.HW)}`:''}${sp.P>0?` · push ${pct(sp.P)}`:''}${sp.HL>0?` · ½pierde ${pct(sp.HL)}`:''} · pierde ${pct(sp.L)}`;
     document.getElementById('d-dist').textContent =
-      `Markov (marcador) × gamma(${(R_FRAIL + (minuto>0?M.ht:0)).toFixed(1)}) · media ${M.pmfMean.toFixed(2)} · var ${M.pmfVar.toFixed(2)} (Poisson ${M.pmfMean.toFixed(2)})`;
+      `Markov (marcador) × gamma(${(M.RF + (minuto>0?M.ht:0)).toFixed(1)}) · media ${M.pmfMean.toFixed(2)} · var ${M.pmfVar.toFixed(2)} (Poisson ${M.pmfMean.toFixed(2)})`;
     renderMinOdds(M, lineaOk ? linea : null, oddsOk ? oddO : null, oddsOk ? oddU : null);
     if (!mode && window.innerWidth<700) document.getElementById('rp').scrollIntoView({behavior:'smooth',block:'start'});
   } catch(e2) { showErr('Error interno: '+e2.message); }
