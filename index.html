@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CornerEdge</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0f1a">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <!-- v38: + Premier, Serie A y Bundesliga (validadas minuto a minuto con Flashscore; factor de nivel por liga) -->
 <!-- v37: EN VIVO — minuto/marcador/córners/rojas/1X2 desde Flashscore cada 30 s · alertas con sonido y vibración (valor y situaciones) · cuota mínima para entrar · cuotas caducadas tras córner · funciona sin cuotas -->
 <!-- v36: pestañas para varios partidos a la vez (formulario y resultado por pestaña, guardadas en el navegador) -->
@@ -1693,8 +1697,21 @@ function fsMapTeam(name, liga) {
   for (const k of Object.keys(db)) if (fsNorm(k) === n) return k;
   return '';
 }
+// v39: Flashscore sólo acepta peticiones con x-fsign desde sus propias webs (CORS por lista blanca),
+// así que desde otra web hace falta un puente propio (Cloudflare Worker) que añade la firma y abre CORS.
+const FS_PROXY_KEY = 'ce-fs-proxy';
+function fsProxy() { try { return (localStorage.getItem(FS_PROXY_KEY) || '').trim().replace(/\/+$/, ''); } catch(e) { return ''; } }
+function saveFsProxy() {
+  const el = document.getElementById('fs-proxy-in'); if (!el) return;
+  let v = el.value.trim().replace(/\/+$/, '');
+  if (v && !/^https:\/\//i.test(v)) v = 'https://' + v;
+  try { v ? localStorage.setItem(FS_PROXY_KEY, v) : localStorage.removeItem(FS_PROXY_KEY); } catch(e) {}
+  toast(v ? '✅ Puente guardado' : 'Puente borrado'); openMatchPicker();
+}
 async function fsGet(feed) {
-  const r = await fetch(FS_FEED + feed, {headers: {'x-fsign': FS_SIGN}, cache: 'no-store'});
+  const px = fsProxy();
+  const r = px ? await fetch(px + '/' + feed, {cache: 'no-store'})
+               : await fetch(FS_FEED + feed, {headers: {'x-fsign': FS_SIGN}, cache: 'no-store'});
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const t = await r.text(); if (!t || t === '0') throw new Error('respuesta vacía'); return t;
 }
@@ -1798,9 +1815,20 @@ async function openMatchPicker() {
     const st = m => m.status === '2' ? '<span style="color:var(--win);font-weight:700">EN JUEGO</span>' : m.status === '3' ? `Final ${m.hg}-${m.ag}` : new Date(m.start).toLocaleString('es-ES', {weekday: 'short', hour: '2-digit', minute: '2-digit'});
     box.innerHTML = all.map(m => `<div class="bkd-row" style="cursor:pointer" onclick='linkMatch(${JSON.stringify(m).replace(/'/g, "&#39;")})'>
       <div class="bkd-name"><span style="font-size:10px;color:var(--tm)">${LEAGUES[m.liga] ? LEAGUES[m.liga].name : ''}</span><br><strong>${escHTML(m.home)}</strong> – <strong>${escHTML(m.away)}</strong></div>
-      <div class="bkd-stats">${st(m)}</div></div>`).join('');
+      <div class="bkd-stats">${st(m)}</div></div>`).join('')
+      + `<details style="margin-top:10px;font-size:11px;color:var(--tm)"><summary>Puente Flashscore</summary>
+          <div style="margin-top:6px;display:flex;gap:6px"><input id="fs-proxy-in" type="url" placeholder="https://xxxx.workers.dev" value="${escHTML(fsProxy())}" style="flex:1;min-width:0">
+          <button class="btn-sm" onclick="saveFsProxy()">Guardar</button></div></details>`;
   } catch(e) {
-    box.innerHTML = `<div class="err-msg">No se pudo leer Flashscore (${escHTML(e.message)}). Puede que hayan cambiado su sistema: la app sigue funcionando en manual.</div>`;
+    const px = fsProxy();
+    box.innerHTML = `<div class="err-msg">No se pudo leer Flashscore (${escHTML(e.message)}). ${px
+        ? 'Revisa que la dirección del puente sea correcta y que el Worker esté desplegado.'
+        : 'Flashscore sólo deja leer sus datos desde otras webs a través de un puente. Pega abajo la dirección de tu puente (Cloudflare Worker).'}
+      La app sigue funcionando en manual.</div>
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <input id="fs-proxy-in" type="url" placeholder="https://xxxx.workers.dev" value="${escHTML(px)}" style="flex:1;min-width:0">
+        <button class="btn-sm" onclick="saveFsProxy()">Guardar</button>
+      </div>`;
   }
 }
 function closeMatchPicker() { document.getElementById('fs-modal').classList.remove('show'); }
@@ -2738,5 +2766,6 @@ function toast(msg,err=false) {
 
 })();
 </script>
+<script>if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}</script>
 </body>
 </html>
