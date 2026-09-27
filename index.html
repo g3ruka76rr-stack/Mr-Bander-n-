@@ -237,7 +237,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 <body>
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
 <header class="hdr">
-  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v44</span></div>
+  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v46</span></div>
   <div class="hdr-right">
     <div class="banca-row">
       <label for="banca">Banca</label>
@@ -927,15 +927,15 @@ let sortCol = 'fecha', sortDir = -1;
 // ─────────────────────────────────────────────────────────────────────────────
 const LEAGUES = {
   ll: {name: 'LaLiga', short: 'La Liga', full: 'LaLiga EA Sports (Primera División de España)', db: DB_LL, lg: LG_LL, goals: GOALS_LL, refs: DB_REFS_LL,
-       lf: [1, 1], rf: 40, fs: 'SPAIN: LaLiga', check: 'modelo estimado aquí (639 partidos)', tags: '#LaLiga #Corners', mention: '@LaLiga'},
+       lf: [1, 1], rf: 80, fs: 'SPAIN: LaLiga', check: 'modelo estimado aquí (639 partidos)', tags: '#LaLiga #Corners', mention: '@LaLiga'},
   s2: {name: 'Hypermotion', short: 'Segunda', full: 'LaLiga Hypermotion (Segunda División de España)', db: DB_S2, lg: LG_S2, goals: GOALS_S2, refs: DB_REFS_S2,
-       lf: [1, 1], rf: 40, fs: 'SPAIN: LaLiga2', check: 'validada al descanso (391 partidos, +1,5%) · reacción al ritmo r=40', tags: '#Hypermotion #LaLiga2 #Corners', mention: '@LaLiga2'},
+       lf: [1, 1], rf: 85, fs: 'SPAIN: LaLiga2', check: 'validada prepartido (2.376 partidos, 5 temporadas: nivel ×0,997) · dispersión r=85', tags: '#Hypermotion #LaLiga2 #Corners', mention: '@LaLiga2'},
   E0: {name: 'Premier', short: 'Premier', full: 'Premier League (Inglaterra)', db: DB_E0, lg: LG_E0, goals: GOALS_E0, refs: {},
-       lf: [1.032, 1.032], rf: 150, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.032 · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
+       lf: [1.064, 1.064], rf: 90, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.064 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
   I1: {name: 'Serie A', short: 'Serie A', full: 'Serie A (Italia)', db: DB_I1, lg: LG_I1, goals: GOALS_I1, refs: {},
-       lf: [0.988, 0.988], rf: 70, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×0.988 · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
+       lf: [1.001, 1.001], rf: 50, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×1.001 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
   D1: {name: 'Bundesliga', short: 'Bundesliga', full: 'Bundesliga (Alemania)', db: DB_D1, lg: LG_D1, goals: GOALS_D1, refs: {},
-       lf: [1.004, 1.059], rf: 50, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
+       lf: [1.004, 1.059], rf: 90, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
        warn: true, tags: '#Bundesliga #Corners', mention: '@Bundesliga'},
 };
 const ligaShort = l => LEAGUES[l] ? LEAGUES[l].short : l === 'man' ? 'Manual' : 'Otra';
@@ -1136,7 +1136,7 @@ function toggleTheme() {
 // LIGA / TEAM / REF SELECTS
 // ─────────────────────────────────────────────────────────────────────────────
 let currentLiga = 'll';
-let lastLvl = 0, lastSide = 'N', lastKellyFrac = 0;
+let lastLvl = 0, lastSide = 'N', lastKellyFrac = 0, lastStakeEur = 0;
 
 function setLiga(btn) {
   document.querySelectorAll('.lt[data-liga]').forEach(b => b.classList.remove('on'));
@@ -1227,13 +1227,13 @@ const ALPHA = 1.0;
 const EV_MIN = 5;   // sólo como referencia cuando no hay cuotas de ambos lados
 // v42 · PROTOCOLO DE ENTRADA (backtest de 2.493 partidos minuto a minuto; ver conversación 27-9-2026)
 const STAKE_CAP = 0.02;                 // tope por apuesta hasta validar con ~40 apuestas registradas
-const PROTO_BAL_LEAGUES = ['E0', 'D1']; // prepartido igualado: hay 5–6% más córners de lo que dice el modelo
+const PROTO_BAL_LEAGUES = ['D1'];   // v45: en Premier desaparece con 1.950 partidos (igualado = resto) // prepartido igualado: hay 5–6% más córners de lo que dice el modelo
 function protocolRule(p) {              // p: {side, minuto, gL, gV, rL, rV, gap, has1x2, liga}
   const m = p.minuto, d = p.gL - p.gV, ad = Math.abs(d), h2 = m >= 45;
   if (p.side === 'O' && h2 && ad >= 2) return {block: 'ventaja de 2+ goles en la 2ª parte: hay menos córners de lo que parece, el Over no se apuesta'};
   if (p.side === 'U' && m >= 75 && d === -1) return {block: 'visitante ganando por 1 desde el 75\': el local aprieta, el Under no se apuesta'};
   if (p.side === 'U' && m === 0 && PROTO_BAL_LEAGUES.includes(p.liga) && p.has1x2 && p.gap < 0.15)
-    return {block: 'prepartido igualado en Premier/Bundesliga: salen más córners de lo esperado, el Under no se apuesta'};
+    return {block: 'prepartido igualado en Bundesliga: salen más córners de lo esperado, el Under no se apuesta'};
   let extra = 0; const why = [];
   if (p.side === 'U' && h2 && ad === 1) { extra += 4; why.push('ventaja de 1 en la 2ª parte'); }
   if (p.rL || p.rV) { extra += 5; why.push('hay roja'); }
@@ -1510,7 +1510,7 @@ function computeModel(inp) {
   const d0 = Math.max(-DMAX + 1, Math.min(DMAX - 1, gL - gV));
   const Erem = chainMean(ctx, remaining, d0);
   // posterior del nivel del partido: Gamma(r + córners vistos, r + esperados vistos)
-  const RF = inp.rFrail || R_FRAIL;   // v44: reacción al ritmo por liga (máx. verosimilitud en 7.479 momentos de 2.493 partidos + 391 de Hypermotion): LaLiga 40, Hypermotion 40, Premier 150, Serie A 70, Bundesliga 50
+  const RF = inp.rFrail || R_FRAIL;   // v45 (uso prepartido): dispersión del nivel del partido estimada en 7.500 partidos prepartido (momentos): LaLiga 80, Premier 90, Serie A 50, Bundesliga 90, Hypermotion 85 (2.376 partidos)
   const a = RF + (minuto > 0 ? ht : 0), b = RF + (minuto > 0 ? Eel : 0);
   const paceMult = a / b;
   const lamModel = Erem.E * paceMult;
@@ -1550,7 +1550,11 @@ function computeModel(inp) {
   return {ht, B, G, mh, ma, str, refEff, qEff, Eel, Erem, paceMult, lamL: Erem.EL * paceMult, lamV: Erem.EV * paceMult,
           lamModel, lamMkt, lam, margin, pmf, pmfMean: mean, pmfVar: vr, spO, spU, evO, evU,
           fO: spO ? fairOdd(spO) : null, fU: spU ? fairOdd(spU) : null, hasOdds, rEff, side, bestEV, bestOdd, kellyFrac, col, thr, pin, proto, protoNote, RF,
-          lvl: side === 'N' ? 0 : Math.max(1, stakeLevel(bestEV)),
+          // v46 · STAKE COMO EN EL TENIS: edge tras el colchón = cuota Bet365 / (cuota justa × colchón) − 1 = (1+EV)/colchón − 1.
+          //   Nivel (etiqueta) por tramos de 5 puntos: 0–5 → 1, 5–10 → 2, 10–15 → 3, 15–20 → 4, ≥20 → 5.
+          //   Euros = Kelly ¼ con la probabilidad protegida (p/colchón) y la cuota real: ¼ · edge/(cuota−1) · banca, redondeado, mín. 1 € y tope 5 €.
+          edgeCol: side === 'N' ? null : ((1 + bestEV / 100) / col - 1) * 100,
+          lvl: side === 'N' ? 0 : Math.min(5, Math.floor(Math.max(0, ((1 + bestEV / 100) / col - 1) * 100) / 5) + 1),
           nRemaining: remaining.reduce((s, u) => s + u.w, 0)};
 }
 
@@ -2080,8 +2084,9 @@ function analyze(mode) {
                           gL, gV, cL, cV, rL, rV, linea: lineaOk ? linea : NaN, oddO: oddsOk ? oddO : NaN, oddU: oddsOk ? oddU : NaN, refMult, qualMult,
                           leagueF: LEAGUES[liga] ? LEAGUES[liga].lf : null, leagueSX: LEAGUES[liga] ? (LEAGUES[liga].sx || null) : null, rFrail: LEAGUES[liga] ? (LEAGUES[liga].rf || null) : null, liga});
   const {side, bestEV, bestOdd, kellyFrac, lvl} = M;
-  const kellyPct = +(kellyFrac*100).toFixed(2), stakeEur = Math.round(banca * kellyFrac);
-  lastLvl = lvl; lastSide = side; lastKellyFrac = kellyFrac;
+  const kQ = side !== 'N' ? 0.25 * (M.edgeCol / 100) / (bestOdd - 1) : 0;          // Kelly ¼ protegido por el colchón
+  const kellyPct = +(kQ*100).toFixed(2), stakeEur = side !== 'N' ? Math.min(5, Math.max(1, Math.round(banca * kQ))) : 0;   // v46: 1–5 €
+  lastLvl = lvl; lastSide = side; lastKellyFrac = kellyFrac; lastStakeEur = stakeEur;
   const predTotal = +(M.ht + M.pmfMean).toFixed(1);
   const pWinSide = side === 'O' ? M.spO : side === 'U' ? M.spU : null;
   lastAnalysis = {
@@ -2130,7 +2135,7 @@ function analyze(mode) {
         : M.protoNote ? `NO ENTRAR · ${M.protoNote}` : `Over: ${f1(M.evO)}  ·  Under: ${f1(M.evU)}  ·  ninguno llega al colchón (+${M.thr.toFixed(1)}%)`;
     const skEl = document.getElementById('sk');
     if (side!=='N') { skEl.hidden = false;
-      document.getElementById('sk-lvl').textContent = `¼ Kelly exacto  ·  ${kellyPct}% de banca${kellyFrac >= STAKE_CAP - 1e-9 ? ` (tope ${STAKE_CAP*100}%)` : ''}  (Nivel ${lvl})`;
+      document.getElementById('sk-lvl').textContent = `Edge tras colchón +${M.edgeCol.toFixed(1)}%  ·  Kelly ¼ ${kellyPct}% de ${banca} €  ·  Nivel ${lvl}  (mín. 1 €, tope 5 €)`;
       document.getElementById('sk-eur').textContent = `€${stakeEur}`; } else skEl.hidden = true;
     document.getElementById('bet-action-row').hidden = (side === 'N');
     document.getElementById('bet-action-row').style.display = side !== 'N' ? 'flex' : 'none';
@@ -2206,7 +2211,7 @@ function openBetModal(prefill) {
   document.getElementById('mf-linea').value  = src.linea != null ? src.linea : '';
   document.getElementById('mf-lado').value   = src.lado || 'Over';
   document.getElementById('mf-cuota').value  = src.cuota != null ? src.cuota : '';
-  document.getElementById('mf-stake').value  = '';
+  document.getElementById('mf-stake').value  = (!prefill && lastSide !== 'N' && lastStakeEur) ? lastStakeEur : '';
   document.getElementById('mf-pred').value   = src.pred || src.lam || '';
   document.getElementById('mf-corners').value = src.corners != null ? src.corners : '';
   document.getElementById('modal-title').textContent = prefill ? 'Editar apuesta' : 'Registrar apuesta';
@@ -2705,11 +2710,7 @@ function toast(msg,err=false) {
   } catch(e){}
   document.getElementById('banca').addEventListener('input',e=>{
     try{localStorage.setItem('ce-banca',e.target.value);}catch(e2){}
-    if(lastSide!=='N'&&lastKellyFrac>0){
-      // Recalcular Kelly con nueva banca — aproximación con kellyPct guardado
-      const nb=parseFloat(e.target.value)||0;
-      document.getElementById('sk-eur').textContent=`€${Math.round(nb*lastKellyFrac)}`;
-    }
+    // v46: el stake se recalcula al pulsar Analizar
   });
   populateTeams();
   populateRefs();
