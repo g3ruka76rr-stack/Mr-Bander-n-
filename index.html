@@ -237,7 +237,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 <body>
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
 <header class="hdr">
-  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v46</span></div>
+  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v47</span></div>
   <div class="hdr-right">
     <div class="banca-row">
       <label for="banca">Banca</label>
@@ -927,15 +927,15 @@ let sortCol = 'fecha', sortDir = -1;
 // ─────────────────────────────────────────────────────────────────────────────
 const LEAGUES = {
   ll: {name: 'LaLiga', short: 'La Liga', full: 'LaLiga EA Sports (Primera División de España)', db: DB_LL, lg: LG_LL, goals: GOALS_LL, refs: DB_REFS_LL,
-       lf: [1, 1], rf: 80, fs: 'SPAIN: LaLiga', check: 'modelo estimado aquí (639 partidos)', tags: '#LaLiga #Corners', mention: '@LaLiga'},
+       lf: [1, 1], rf: [80, 40], fs: 'SPAIN: LaLiga', check: 'modelo estimado aquí (639 partidos)', tags: '#LaLiga #Corners', mention: '@LaLiga'},
   s2: {name: 'Hypermotion', short: 'Segunda', full: 'LaLiga Hypermotion (Segunda División de España)', db: DB_S2, lg: LG_S2, goals: GOALS_S2, refs: DB_REFS_S2,
-       lf: [1, 1], rf: 85, fs: 'SPAIN: LaLiga2', check: 'validada prepartido (2.376 partidos, 5 temporadas: nivel ×0,997) · dispersión r=85', tags: '#Hypermotion #LaLiga2 #Corners', mention: '@LaLiga2'},
+       lf: [1, 1], rf: [85, 40], fs: 'SPAIN: LaLiga2', check: 'validada prepartido (2.376 partidos, 5 temporadas: nivel ×0,997) · dispersión r=85', tags: '#Hypermotion #LaLiga2 #Corners', mention: '@LaLiga2'},
   E0: {name: 'Premier', short: 'Premier', full: 'Premier League (Inglaterra)', db: DB_E0, lg: LG_E0, goals: GOALS_E0, refs: {},
-       lf: [1.064, 1.064], rf: 90, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.064 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
+       lf: [1.064, 1.064], rf: [90, 150], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.064 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
   I1: {name: 'Serie A', short: 'Serie A', full: 'Serie A (Italia)', db: DB_I1, lg: LG_I1, goals: GOALS_I1, refs: {},
-       lf: [1.001, 1.001], rf: 50, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×1.001 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
+       lf: [1.001, 1.001], rf: [50, 70], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×1.001 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
   D1: {name: 'Bundesliga', short: 'Bundesliga', full: 'Bundesliga (Alemania)', db: DB_D1, lg: LG_D1, goals: GOALS_D1, refs: {},
-       lf: [1.004, 1.059], rf: 90, sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
+       lf: [1.004, 1.059], rf: [90, 55], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
        warn: true, tags: '#Bundesliga #Corners', mention: '@Bundesliga'},
 };
 const ligaShort = l => LEAGUES[l] ? LEAGUES[l].short : l === 'man' ? 'Manual' : 'Otra';
@@ -1510,7 +1510,7 @@ function computeModel(inp) {
   const d0 = Math.max(-DMAX + 1, Math.min(DMAX - 1, gL - gV));
   const Erem = chainMean(ctx, remaining, d0);
   // posterior del nivel del partido: Gamma(r + córners vistos, r + esperados vistos)
-  const RF = inp.rFrail || R_FRAIL;   // v45 (uso prepartido): dispersión del nivel del partido estimada en 7.500 partidos prepartido (momentos): LaLiga 80, Premier 90, Serie A 50, Bundesliga 90, Hypermotion 85 (2.376 partidos)
+  const RF = Array.isArray(inp.rFrail) ? (minuto > 0 ? inp.rFrail[1] : inp.rFrail[0]) : (inp.rFrail || R_FRAIL);   // v47: [prepartido, en juego]   // v45 (uso prepartido): dispersión del nivel del partido estimada en 7.500 partidos prepartido (momentos): LaLiga 80, Premier 90, Serie A 50, Bundesliga 90, Hypermotion 85 (2.376 partidos)
   const a = RF + (minuto > 0 ? ht : 0), b = RF + (minuto > 0 ? Eel : 0);
   const paceMult = a / b;
   const lamModel = Erem.E * paceMult;
