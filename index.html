@@ -237,7 +237,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 <body>
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
 <header class="hdr">
-  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v47</span></div>
+  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v48</span></div>
   <div class="hdr-right">
     <div class="banca-row">
       <label for="banca">Banca</label>
@@ -1550,11 +1550,12 @@ function computeModel(inp) {
   return {ht, B, G, mh, ma, str, refEff, qEff, Eel, Erem, paceMult, lamL: Erem.EL * paceMult, lamV: Erem.EV * paceMult,
           lamModel, lamMkt, lam, margin, pmf, pmfMean: mean, pmfVar: vr, spO, spU, evO, evU,
           fO: spO ? fairOdd(spO) : null, fU: spU ? fairOdd(spU) : null, hasOdds, rEff, side, bestEV, bestOdd, kellyFrac, col, thr, pin, proto, protoNote, RF,
-          // v46 · STAKE COMO EN EL TENIS: edge tras el colchón = cuota Bet365 / (cuota justa × colchón) − 1 = (1+EV)/colchón − 1.
-          //   Nivel (etiqueta) por tramos de 5 puntos: 0–5 → 1, 5–10 → 2, 10–15 → 3, 15–20 → 4, ≥20 → 5.
-          //   Euros = Kelly ¼ con la probabilidad protegida (p/colchón) y la cuota real: ¼ · edge/(cuota−1) · banca, redondeado, mín. 1 € y tope 5 €.
-          edgeCol: side === 'N' ? null : ((1 + bestEV / 100) / col - 1) * 100,
-          lvl: side === 'N' ? 0 : Math.min(5, Math.floor(Math.max(0, ((1 + bestEV / 100) / col - 1) * 100) / 5) + 1),
+          // v48 · El colchón SÓLO decide si hay valor (cuota justa × colchón ≤ cuota Bet365).
+          //   El edge se mide contra la cuota REAL de Bet365: edge = cuota Bet365 / cuota justa − 1 = EV.
+          //   Nivel por tramos de 5 puntos: 0–5 → 1, 5–10 → 2, 10–15 → 3, 15–20 → 4, ≥20 → 5.
+          //   Euros = Kelly ¼ con ese edge y la cuota real: ¼ · edge/(cuota−1) · banca, redondeado, mín. 1 € y tope 5 €.
+          edgeCol: side === 'N' ? null : bestEV,
+          lvl: side === 'N' ? 0 : Math.min(5, Math.floor(Math.max(0, bestEV) / 5) + 1),
           nRemaining: remaining.reduce((s, u) => s + u.w, 0)};
 }
 
@@ -2084,7 +2085,7 @@ function analyze(mode) {
                           gL, gV, cL, cV, rL, rV, linea: lineaOk ? linea : NaN, oddO: oddsOk ? oddO : NaN, oddU: oddsOk ? oddU : NaN, refMult, qualMult,
                           leagueF: LEAGUES[liga] ? LEAGUES[liga].lf : null, leagueSX: LEAGUES[liga] ? (LEAGUES[liga].sx || null) : null, rFrail: LEAGUES[liga] ? (LEAGUES[liga].rf || null) : null, liga});
   const {side, bestEV, bestOdd, kellyFrac, lvl} = M;
-  const kQ = side !== 'N' ? 0.25 * (M.edgeCol / 100) / (bestOdd - 1) : 0;          // Kelly ¼ protegido por el colchón
+  const kQ = side !== 'N' ? 0.25 * (M.edgeCol / 100) / (bestOdd - 1) : 0;          // v48: Kelly ¼ con el edge frente a la cuota real
   const kellyPct = +(kQ*100).toFixed(2), stakeEur = side !== 'N' ? Math.min(5, Math.max(1, Math.round(banca * kQ))) : 0;   // v46: 1–5 €
   lastLvl = lvl; lastSide = side; lastKellyFrac = kellyFrac; lastStakeEur = stakeEur;
   const predTotal = +(M.ht + M.pmfMean).toFixed(1);
@@ -2135,7 +2136,7 @@ function analyze(mode) {
         : M.protoNote ? `NO ENTRAR · ${M.protoNote}` : `Over: ${f1(M.evO)}  ·  Under: ${f1(M.evU)}  ·  ninguno llega al colchón (+${M.thr.toFixed(1)}%)`;
     const skEl = document.getElementById('sk');
     if (side!=='N') { skEl.hidden = false;
-      document.getElementById('sk-lvl').textContent = `Edge tras colchón +${M.edgeCol.toFixed(1)}%  ·  Kelly ¼ ${kellyPct}% de ${banca} €  ·  Nivel ${lvl}  (mín. 1 €, tope 5 €)`;
+      document.getElementById('sk-lvl').textContent = `Edge vs cuota Bet365 +${M.edgeCol.toFixed(1)}%  ·  Kelly ¼ ${kellyPct}% de ${banca} €  ·  Nivel ${lvl}  (mín. 1 €, tope 5 €)`;
       document.getElementById('sk-eur').textContent = `€${stakeEur}`; } else skEl.hidden = true;
     document.getElementById('bet-action-row').hidden = (side === 'N');
     document.getElementById('bet-action-row').style.display = side !== 'N' ? 'flex' : 'none';
