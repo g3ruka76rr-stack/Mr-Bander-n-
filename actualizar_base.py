@@ -2,7 +2,7 @@
 """
 CornerEdge · actualizador de la base de equipos
 ================================================
-Descarga los resultados con córners de football-data.co.uk (LaLiga SP1, Hypermotion SP2, Premier E0, Serie A I1, Bundesliga D1),
+Descarga los resultados con córners de football-data.co.uk (LaLiga, Hypermotion, Premier, Serie A, Bundesliga, Ligue 1, Portugal, Championship, 2. Bundesliga, Eredivisie, Bélgica, Escocia),
 recalcula la base ataque×defensa con el mismo método con el que se estimó el modelo (v33) y
 reescribe el bloque de datos dentro del HTML de la app.
 
@@ -24,7 +24,8 @@ import csv, io, json, re, sys, urllib.request, datetime as dt, argparse, statist
 
 K_PREV, K_LG, K_LEAGUE = 6, 3, 150
 # (código football-data, sufijo en la app, nº de equipos esperado)
-LEAGUES = [('SP1', 'LL', 20), ('SP2', 'S2', 22), ('E0', 'E0', 20), ('I1', 'I1', 20), ('D1', 'D1', 18)]
+LEAGUES = [('SP1', 'LL', 20), ('SP2', 'S2', 22), ('E0', 'E0', 20), ('I1', 'I1', 20), ('D1', 'D1', 18),
+           ('F1', 'F1', 18), ('P1', 'P1', 18), ('E1', 'E1', 24), ('D2', 'D2', 18), ('N1', 'N1', 18), ('B1', 'B1', 18), ('SC0', 'SC0', 12)]
 URL = 'https://www.football-data.co.uk/mmz4281/{season}/{league}.csv'
 
 

@@ -101,7 +101,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:15px
 .ch{padding:10px 14px 9px;border-bottom:1px solid var(--bds);font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--tm);display:flex;align-items:center;gap:6px;}
 .ch .dot{width:5px;height:5px;border-radius:50%;background:var(--ac);flex-shrink:0;}
 .cb{padding:14px;}
-.ltabs{display:flex;overflow-x:auto;scrollbar-width:none;background:var(--rsd);border:1px solid var(--bd);border-radius:8px;padding:3px;margin-bottom:12px;}
+.ltabs{display:flex;flex-wrap:wrap;gap:2px;overflow-x:auto;scrollbar-width:none;background:var(--rsd);border:1px solid var(--bd);border-radius:8px;padding:3px;margin-bottom:12px;}
 .lt{flex:1 0 auto;white-space:nowrap;padding:7px 8px;font-size:11px;font-weight:700;letter-spacing:.04em;text-align:center;color:var(--tm);border-radius:6px;cursor:pointer;border:none;background:transparent;transition:background .12s,color .12s;font-family:var(--sans);}
 .lt.on{background:var(--ac);color:#001a14;}
 .fl{margin-bottom:11px;}
@@ -237,7 +237,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 <body>
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
 <header class="hdr">
-  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v48</span></div>
+  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v50</span></div>
   <div class="hdr-right">
     <div class="banca-row">
       <label for="banca">Banca</label>
@@ -268,6 +268,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
       <button class="lt" data-liga="E0" onclick="setLiga(this)">Premier</button>
       <button class="lt" data-liga="I1" onclick="setLiga(this)">Serie A</button>
       <button class="lt" data-liga="D1" onclick="setLiga(this)">Bundesliga</button>
+      <span id="lt-extra" style="display:contents"></span>
       <button class="lt" data-liga="man" onclick="setLiga(this)">Manual</button>
     </div>
 
@@ -678,7 +679,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────────────────────────────────────
-// Base de equipos generada desde football-data.co.uk (córners oficiales), hasta 2026-09-27.
+// Base de equipos generada desde football-data.co.uk (córners oficiales), hasta 2026-09-28.
 // [a favor casa, concedidos casa, a favor fuera, concedidos fuera, PJ casa, PJ fuera, prior temporada previa (1/0)]
 // Temporada en curso + temporada previa del mismo equipo en la misma liga como prior (6 partidos); sin previa → media de liga (3).
 const DB_LL = {
@@ -709,22 +710,22 @@ const DB_S2 = {
   "Andorra": [5.771, 2.8, 4.095, 5.873, 4, 3, 1],
   "Burgos": [3.514, 4.843, 3.714, 5.905, 4, 3, 1],
   "Cadiz": [5.214, 4.986, 3.222, 4.968, 4, 3, 1],
-  "Castellon": [5.46, 3.603, 6.667, 3.841, 3, 3, 1],
-  "Celta B": [4.305, 3.909, 3.894, 5.19, 4, 3, 0],
+  "Castellon": [5.46, 3.603, 6.2, 3.857, 3, 4, 1],
+  "Celta B": [4.303, 3.905, 3.89, 5.187, 4, 3, 0],
   "Ceuta": [5.514, 3.9, 3.492, 4.254, 4, 3, 1],
   "Cordoba": [6.302, 2.984, 5.586, 4.114, 3, 4, 1],
   "Eibar": [4.871, 3.743, 3.063, 6.286, 4, 3, 1],
-  "Eldense": [6.023, 4.228, 5.338, 4.02, 3, 4, 0],
-  "Girona": [5.02, 4.195, 3.228, 3.856, 4, 3, 0],
+  "Eldense": [6.021, 4.223, 5.334, 4.018, 3, 4, 0],
+  "Girona": [5.018, 4.191, 3.223, 3.854, 4, 3, 0],
   "Granada": [6.111, 3.905, 3.6, 4.971, 3, 4, 1],
   "Las Palmas": [4.714, 4.032, 4.014, 4.529, 3, 4, 1],
-  "Leganes": [5.0, 4.786, 3.229, 5.571, 2, 4, 1],
-  "Mallorca": [4.305, 3.909, 4.061, 5.356, 4, 3, 0],
-  "Oviedo": [5.877, 3.767, 3.561, 4.856, 4, 3, 0],
-  "Sabadell": [4.356, 3.394, 5.338, 3.877, 3, 4, 0],
+  "Leganes": [4.889, 4.476, 3.229, 5.571, 3, 4, 1],
+  "Mallorca": [4.303, 3.905, 4.056, 5.354, 4, 3, 0],
+  "Oviedo": [5.875, 3.763, 3.556, 4.854, 4, 3, 0],
+  "Sabadell": [4.354, 3.39, 5.334, 3.875, 3, 4, 0],
   "Sociedad B": [3.873, 4.794, 3.657, 6.3, 3, 4, 1],
   "Sp Gijon": [4.443, 4.629, 3.603, 5.778, 4, 3, 1],
-  "Tenerife": [4.02, 3.767, 3.894, 4.023, 4, 3, 0],
+  "Tenerife": [4.018, 3.763, 3.89, 4.021, 4, 3, 0],
   "Valladolid": [4.73, 3.143, 4.443, 4.043, 3, 4, 1]
 };
 const DB_E0 = {
@@ -791,12 +792,159 @@ const DB_D1 = {
   "Union Berlin": [5.007, 4.228, 3.993, 6.382, 2, 2, 1],
   "Werder Bremen": [4.118, 3.64, 4.426, 6.735, 2, 2, 1]
 };
+const DB_F1 = {
+  "Angers": [5.19, 5.359, 4.25, 5.654, 3, 2, 1],
+  "Auxerre": [5.647, 5.314, 4.544, 5.375, 3, 2, 1],
+  "Brest": [4.735, 3.456, 4.039, 6.693, 2, 3, 1],
+  "Le Havre": [4.993, 3.941, 4.279, 6.051, 3, 2, 1],
+  "Le Mans": [3.428, 5.872, 4.247, 5.714, 3, 2, 0],
+  "Lens": [6.618, 3.963, 6.32, 3.673, 2, 3, 1],
+  "Lille": [5.015, 3.941, 4.706, 4.556, 2, 3, 1],
+  "Lorient": [3.176, 4.971, 3.216, 5.647, 2, 3, 1],
+  "Lyon": [6.242, 4.706, 4.926, 5.706, 3, 2, 1],
+  "Marseille": [4.948, 3.784, 5.074, 4.044, 3, 2, 1],
+  "Monaco": [4.581, 4.919, 4.673, 4.725, 2, 3, 1],
+  "Nice": [5.575, 5.176, 4.985, 4.86, 3, 2, 1],
+  "Paris FC": [4.686, 3.68, 3.176, 6.449, 3, 2, 1],
+  "Paris SG": [7.261, 2.319, 5.541, 2.753, 1, 4, 1],
+  "Rennes": [5.536, 5.392, 5.897, 5.316, 3, 2, 1],
+  "Strasbourg": [4.331, 5.022, 2.797, 5.026, 2, 3, 1],
+  "Toulouse": [5.373, 4.458, 3.404, 5.654, 3, 2, 1],
+  "Troyes": [6.514, 3.047, 5.706, 3.595, 2, 3, 0]
+};
+const DB_P1 = {
+  "Academico Viseu": [3.974, 3.954, 3.246, 5.835, 3, 4, 0],
+  "Alverca": [4.988, 2.841, 4.19, 5.216, 4, 3, 1],
+  "Arouca": [4.039, 4.81, 2.812, 5.688, 3, 4, 1],
+  "Benfica": [8.647, 1.948, 5.965, 2.8, 3, 4, 1],
+  "Casa Pia": [3.614, 5.281, 4.482, 6.606, 3, 4, 1],
+  "Estoril": [5.588, 4.747, 3.412, 5.163, 4, 3, 1],
+  "Estrela": [4.153, 5.282, 2.928, 5.15, 4, 3, 1],
+  "Famalicao": [5.471, 4.065, 5.441, 5.071, 3, 4, 1],
+  "Gil Vicente": [5.147, 3.012, 4.654, 5.897, 4, 2, 1],
+  "Guimaraes": [5.547, 3.476, 4.203, 3.575, 4, 3, 1],
+  "Maritimo": [3.974, 4.787, 3.532, 4.121, 3, 4, 0],
+  "Moreirense": [3.778, 4.967, 2.476, 4.847, 3, 4, 1],
+  "Nacional": [4.859, 5.129, 3.444, 6.144, 4, 3, 1],
+  "Porto": [6.488, 3.265, 5.654, 3.333, 4, 3, 1],
+  "Rio Ave": [4.745, 5.595, 3.047, 6.935, 3, 4, 1],
+  "Santa Clara": [4.518, 4.541, 4.026, 5.131, 4, 3, 1],
+  "Sp Braga": [4.721, 2.794, 4.976, 3.541, 2, 4, 1],
+  "Sp Lisbon": [6.141, 2.465, 6.203, 3.34, 4, 3, 1]
+};
+const DB_E1 = {
+  "Birmingham": [6.239, 3.822, 5.474, 4.761, 4, 4, 1],
+  "Blackburn": [5.296, 4.878, 5.922, 5.174, 4, 4, 1],
+  "Bolton": [6.046, 4.575, 4.575, 5.475, 4, 4, 0],
+  "Bristol City": [5.191, 5.422, 4.826, 5.03, 4, 4, 1],
+  "Burnley": [5.189, 5.003, 4.86, 4.332, 4, 4, 0],
+  "Cardiff": [7.475, 4.432, 6.003, 4.903, 4, 4, 0],
+  "Charlton": [5.452, 5.057, 3.004, 6.748, 4, 4, 1],
+  "Derby": [6.613, 4.635, 3.965, 6.335, 4, 4, 1],
+  "Lincoln": [5.189, 4.432, 4.003, 9.332, 4, 4, 0],
+  "Middlesbrough": [7.491, 4.361, 5.3, 4.826, 4, 4, 1],
+  "Millwall": [5.23, 5.448, 5.13, 7.0, 4, 4, 1],
+  "Norwich": [5.517, 4.13, 4.726, 5.491, 4, 4, 1],
+  "Portsmouth": [6.857, 4.509, 5.333, 5.855, 4, 3, 1],
+  "Preston": [6.057, 5.73, 3.491, 6.161, 4, 4, 1],
+  "QPR": [6.535, 3.496, 4.657, 5.865, 4, 4, 1],
+  "Sheffield United": [5.939, 5.13, 4.37, 6.843, 4, 4, 1],
+  "Southampton": [6.083, 4.787, 5.33, 4.352, 4, 4, 1],
+  "Stoke": [5.835, 3.93, 4.939, 5.561, 4, 4, 1],
+  "Swansea": [5.004, 4.4, 3.874, 5.365, 4, 4, 1],
+  "Watford": [4.661, 5.943, 4.187, 5.617, 4, 4, 1],
+  "West Brom": [5.752, 3.404, 4.357, 6.243, 4, 4, 1],
+  "West Ham": [5.475, 5.289, 6.575, 4.618, 4, 4, 0],
+  "Wolves": [6.221, 4.504, 5.432, 5.189, 3, 4, 0],
+  "Wrexham": [5.004, 4.391, 4.17, 5.557, 4, 4, 1]
+};
+const DB_D2 = {
+  "Bielefeld": [6.059, 4.529, 6.209, 4.895, 3, 3, 1],
+  "Bochum": [4.85, 4.17, 5.778, 6.412, 3, 3, 1],
+  "Braunschweig": [4.549, 6.359, 4.765, 5.81, 3, 3, 1],
+  "Cottbus": [6.22, 4.95, 6.783, 5.387, 3, 3, 0],
+  "Darmstadt": [4.967, 6.32, 4.503, 6.275, 3, 3, 1],
+  "Dresden": [5.549, 5.085, 5.601, 5.562, 3, 3, 1],
+  "Greuther Furth": [4.373, 4.876, 5.0, 6.17, 3, 3, 1],
+  "Hannover": [6.595, 4.948, 5.013, 4.281, 3, 3, 1],
+  "Heidenheim": [5.387, 6.283, 4.283, 5.553, 3, 3, 0],
+  "Hertha": [4.824, 5.706, 4.871, 5.494, 2, 4, 1],
+  "Holstein Kiel": [6.856, 4.771, 4.49, 5.301, 3, 3, 1],
+  "Kaiserslautern": [5.987, 4.582, 3.621, 5.928, 3, 3, 1],
+  "Karlsruhe": [5.259, 5.635, 5.309, 4.11, 4, 2, 1],
+  "Magdeburg": [4.863, 3.967, 5.856, 4.908, 3, 3, 1],
+  "Nurnberg": [5.118, 5.0, 5.078, 4.745, 3, 3, 1],
+  "Osnabruck": [4.72, 5.783, 3.783, 6.053, 3, 3, 0],
+  "St Pauli": [6.553, 4.283, 4.617, 5.553, 3, 3, 0],
+  "Wolfsburg": [6.22, 4.95, 5.45, 7.387, 3, 3, 0]
+};
+const DB_N1 = {
+  "AZ Alkmaar": [6.829, 4.112, 6.765, 4.026, 4, 3, 1],
+  "Ajax": [6.276, 3.112, 5.68, 5.229, 4, 3, 1],
+  "Cambuur": [4.459, 5.592, 4.357, 5.535, 4, 3, 0],
+  "Den Haag": [5.035, 3.19, 4.163, 7.744, 3, 4, 0],
+  "Excelsior": [4.118, 4.268, 4.2, 6.041, 3, 4, 1],
+  "Feyenoord": [7.81, 3.451, 5.953, 3.518, 3, 4, 1],
+  "For Sittard": [4.405, 8.098, 2.724, 6.429, 3, 4, 1],
+  "Go Ahead Eagles": [6.536, 4.359, 4.847, 6.518, 3, 4, 1],
+  "Groningen": [6.629, 4.1, 4.392, 5.81, 4, 3, 1],
+  "Heerenveen": [5.665, 4.541, 5.118, 5.915, 4, 3, 1],
+  "Nijmegen": [6.159, 3.441, 5.203, 4.281, 4, 3, 1],
+  "PSV Eindhoven": [8.059, 3.784, 6.624, 3.588, 3, 4, 1],
+  "Sparta Rotterdam": [5.553, 6.618, 4.497, 6.954, 4, 3, 1],
+  "Telstar": [5.346, 4.987, 3.771, 7.7, 3, 4, 1],
+  "Twente": [6.724, 3.282, 5.444, 4.771, 4, 3, 1],
+  "Utrecht": [4.523, 5.98, 4.441, 4.782, 3, 4, 1],
+  "Willem II": [5.602, 4.592, 3.357, 8.035, 4, 3, 0],
+  "Zwolle": [4.15, 6.634, 3.471, 6.735, 3, 4, 1]
+};
+const DB_B1 = {
+  "Anderlecht": [6.77, 3.03, 5.556, 5.333, 4, 3, 1],
+  "Antwerp": [4.7, 4.14, 4.867, 6.111, 4, 3, 1],
+  "Beveren": [4.236, 5.816, 5.128, 3.917, 3, 4, 0],
+  "Cercle Brugge": [6.481, 4.37, 5.767, 5.667, 3, 4, 1],
+  "Charleroi": [5.33, 4.32, 5.822, 5.022, 4, 3, 1],
+  "Club Brugge": [7.64, 3.47, 7.0, 4.178, 4, 3, 1],
+  "Genk": [6.5, 4.944, 3.59, 5.12, 3, 4, 1],
+  "Gent": [5.0, 4.51, 4.267, 6.2, 4, 3, 1],
+  "Kortrijk": [4.774, 5.556, 3.483, 4.903, 4, 3, 0],
+  "Lommel SK": [4.345, 6.414, 3.983, 6.236, 4, 3, 0],
+  "Mechelen": [5.122, 5.311, 4.26, 4.84, 3, 4, 1],
+  "Oud-Heverlee Leuven": [4.59, 6.95, 3.789, 7.122, 4, 3, 1],
+  "RAAL La Louviere": [4.741, 3.778, 3.6, 6.176, 3, 4, 1],
+  "St Truiden": [5.94, 3.74, 4.689, 5.156, 4, 3, 1],
+  "St. Gilloise": [6.211, 2.978, 5.11, 4.06, 3, 4, 1],
+  "Standard": [6.111, 5.144, 3.66, 5.75, 3, 4, 1],
+  "Waregem": [4.963, 4.778, 4.6, 5.567, 3, 4, 1],
+  "Westerlo": [4.589, 5.122, 4.49, 5.97, 3, 4, 1]
+};
+const DB_SC0 = {
+  "Aberdeen": [5.637, 5.269, 4.179, 6.605, 3, 4, 1],
+  "Celtic": [8.411, 3.811, 6.865, 4.322, 4, 3, 1],
+  "Dundee": [4.616, 5.647, 3.509, 6.942, 4, 3, 1],
+  "Dundee United": [6.357, 6.123, 3.942, 5.458, 3, 4, 1],
+  "Falkirk": [4.667, 4.522, 4.867, 5.933, 3, 4, 1],
+  "Hearts": [6.836, 3.906, 5.842, 4.253, 3, 4, 1],
+  "Hibernian": [7.047, 6.326, 4.62, 4.807, 4, 3, 1],
+  "Kilmarnock": [4.605, 4.721, 4.415, 7.246, 4, 3, 1],
+  "Motherwell": [4.339, 3.269, 4.605, 6.011, 3, 4, 1],
+  "Rangers": [7.31, 2.965, 6.674, 5.337, 3, 4, 1],
+  "St Johnstone": [4.28, 6.182, 4.212, 5.327, 4, 3, 0],
+  "St Mirren": [5.516, 5.632, 4.795, 6.889, 4, 3, 1]
+};
 const LG_LL = {"hf": 5.385, "vf": 4.276}, GOALS_LL = [1.595, 1.154];
-const LG_S2 = {"hf": 5.046, "vf": 4.122}, GOALS_S2 = [1.444, 1.171];
+const LG_S2 = {"hf": 5.041, "vf": 4.113}, GOALS_S2 = [1.442, 1.173];
 const LG_E0 = {"hf": 5.281, "vf": 4.562}, GOALS_E0 = [1.526, 1.233];
 const LG_I1 = {"hf": 5.007, "vf": 3.983}, GOALS_I1 = [1.3, 1.181];
 const LG_D1 = {"hf": 5.613, "vf": 4.356}, GOALS_D1 = [1.842, 1.453];
-const DB_DATE = '2026-09-27';
+const LG_F1 = {"hf": 5.189, "vf": 4.412}, GOALS_F1 = [1.578, 1.245];
+const LG_P1 = {"hf": 4.948, "vf": 4.241}, GOALS_P1 = [1.467, 1.226];
+const LG_E1 = {"hf": 5.775, "vf": 4.674}, GOALS_E1 = [1.436, 1.215];
+const LG_D2 = {"hf": 5.44, "vf": 4.9}, GOALS_D2 = [1.647, 1.342];
+const LG_N1 = {"hf": 5.737, "vf": 4.714}, GOALS_N1 = [1.786, 1.499];
+const LG_B1 = {"hf": 5.472, "vf": 4.632}, GOALS_B1 = [1.479, 1.241];
+const LG_SC0 = {"hf": 5.654, "vf": 4.758}, GOALS_SC0 = [1.526, 1.219];
+const DB_DATE = '2026-09-28';
 
 // DB_REFS_LL — calibrado 26-27 J1-J7 (69 partidos, media=9.56)
 const DB_REFS_LL = {
@@ -938,7 +1086,33 @@ const LEAGUES = {
        lf: [1.004, 1.059], rf: [90, 55], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
        warn: true, tags: '#Bundesliga #Corners', mention: '@Bundesliga'},
 };
+// v49 · LIGAS NUEVAS (validadas sólo PREPARTIDO con football-data: 7.239 partidos de 10 ligas, 2024-25 a 2026-27).
+//   Nivel = córners reales / modelo en prepartido; dispersión r estimada por momentos.
+//   v50 · Descanso validado con 3.188 partidos de Flashscore (córners por partes): reacción al ritmo r=100 (verosimilitud plana entre 70 y 150).
+//   Se añaden sólo si su base existe (si la actualización semanal usara un script antiguo, la app no se rompe).
+[
+  ['F1',  'DB_F1',  'Ligue 1',       'Ligue 1',       'Ligue 1 (Francia)',             [1, 1],         [41, 100], 'FRANCE: Ligue 1',             'prepartido: 657 partidos · nivel ×1,005 (sin ajuste) · descanso validado (464 partidos; Under real−app +1,4 pts)', '#Ligue1 #Corners', '@Ligue1'],
+  ['P1',  'DB_P1',  'Portugal',      'Portugal',      'Liga Portugal (Portugal)',      [1, 1],         [70, 100], 'PORTUGAL: Liga Portugal',     'prepartido: 674 partidos · nivel ×0,989 (sin ajuste) · descanso validado (465 partidos; Under real−app −0,2 pts)', '#LigaPortugal #Corners', '@LigaPortugal'],
+  ['E1',  'DB_E1',  'Championship',  'Championship',  'Championship (Inglaterra)',     [1.054, 1.054], [58, 100], 'ENGLAND: Championship',       'prepartido: 1.199 partidos · nivel ×1,054 · descanso validado (494 partidos; Under real−app −3,1 pts)', '#Championship #Corners', '@SkyBetChamp'],
+  ['D2',  'DB_D2',  '2. Bundesliga', '2. Bundesliga', '2. Bundesliga (Alemania)',      [1.051, 1.051], [60, 100], 'GERMANY: 2. Bundesliga',      'prepartido: 666 partidos · nivel ×1,051 · descanso validado (460 partidos; Under real−app −0,5 pts)', '#2Bundesliga #Corners', '@Bundesliga_EN'],
+  ['N1',  'DB_N1',  'Eredivisie',    'Eredivisie',    'Eredivisie (Países Bajos)',     [1.047, 1.047], [85, 100], 'NETHERLANDS: Eredivisie',     'prepartido: 675 partidos · nivel ×1,047 · descanso validado (443 partidos; Under real−app −3,5 pts)', '#Eredivisie #Corners', '@Eredivisie'],
+  ['B1',  'DB_B1',  'Bélgica',       'Bélgica',       'Pro League (Bélgica)',          [1.044, 1.044], [61, 100], 'BELGIUM: Jupiler Pro League', 'prepartido: 685 partidos · nivel ×1,044 · descanso validado (436 partidos; Under real−app +2,8 pts)', '#ProLeague #Corners', '@ProLeague'],
+  ['SC0', 'DB_SC0', 'Escocia',       'Escocia',       'Premiership (Escocia)',         [1.073, 1.073], [72, 100], 'SCOTLAND: Premiership',       'prepartido: 498 partidos · nivel ×1,073 · descanso validado (426 partidos; Under real−app +1,4 pts)', '#SPFL #Corners', '@spfl'],
+].forEach(([k, dbName, name, short, full, lf, rf, fs, check, tags, mention]) => {
+  let db, lg, goals;
+  try { db = eval(dbName); lg = eval('LG_' + dbName.slice(3)); goals = eval('GOALS_' + dbName.slice(3)); } catch (e) { return; }
+  LEAGUES[k] = {name, short, full, db, lg, goals, refs: {}, lf, rf, fs, check, tags, mention, pre: true};
+});
 const ligaShort = l => LEAGUES[l] ? LEAGUES[l].short : l === 'man' ? 'Manual' : 'Otra';
+function renderExtraLeagueButtons() {
+  const box = document.getElementById('lt-extra'); if (!box) return;
+  box.innerHTML = Object.keys(LEAGUES).filter(k => LEAGUES[k].pre)
+    .map(k => `<button class="lt" data-liga="${k}" onclick="setLiga(this)">${LEAGUES[k].name}</button>`).join('');
+  ['mf-liga', 'f-liga'].forEach(id => { const sel = document.getElementById(id);
+    if (sel) { const otra = sel.querySelector('option[value="Otra"]');
+      Object.keys(LEAGUES).filter(k => LEAGUES[k].pre).forEach(k => { if (![...sel.options].some(o => o.value === LEAGUES[k].short)) {
+        const o = document.createElement('option'); o.value = o.textContent = LEAGUES[k].short; sel.insertBefore(o, otra); } }); } });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUALITATIVE FACTORS (v31)
@@ -2713,6 +2887,7 @@ function toast(msg,err=false) {
     try{localStorage.setItem('ce-banca',e.target.value);}catch(e2){}
     // v46: el stake se recalcula al pulsar Analizar
   });
+  renderExtraLeagueButtons();
   populateTeams();
   populateRefs();
   buildQualChecklist();
