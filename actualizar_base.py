@@ -13,6 +13,9 @@ Uso:
 Genera:  <nombre>_base-AAAA-MM-DD.html   (el original no se toca)
 Requisitos: Python 3.8+ sin librerías externas.
 
+v51 · Además guarda el DIBUJO de los últimos 3 partidos de liga de cada equipo (Flashscore), para que la app
+marque sola «tres centrales con tres arriba». Si Flashscore falla, se conserva lo que hubiera: la base se actualiza igual.
+
 Método (idéntico a la estimación):
   · a favor / concedidos en casa y fuera por equipo, temporada en curso
   · prior = temporada previa del mismo equipo en la misma liga (6 partidos) si jugó ≥5 como local/visitante;
@@ -129,6 +132,145 @@ def js_block(R):
 
 BLOCK_RE = re.compile(r"// Base de equipos generada desde football-data\.co\.uk.*?\nconst DB_DATE = '[^']*';\n", re.S)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# v51 · DIBUJOS RECIENTES (Flashscore)
+# ─────────────────────────────────────────────────────────────────────────────
+FS_SLUG = {'SP1': 'espana/laliga', 'SP2': 'espana/laliga-hypermotion', 'E0': 'inglaterra/premier-league', 'I1': 'italia/serie-a',
+           'D1': 'alemania/bundesliga', 'F1': 'francia/ligue-1', 'P1': 'portugal/liga-portugal', 'E1': 'inglaterra/championship',
+           'D2': 'alemania/2-bundesliga', 'N1': 'paises-bajos/eredivisie', 'B1': 'belgica/jupiler-pro-league', 'SC0': 'escocia/premiership'}
+APP_KEY = {'SP1': 'll', 'SP2': 's2'}          # el resto usa el mismo código que football-data
+FS_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+FORM_RE = re.compile(r"// Dibujos recientes \(Flashscore\).*?\nconst FORM_DATE = '[^']*';\n", re.S)
+N_FORM = 3
+
+
+def fs_get(url, feed=False):
+    h = {'User-Agent': FS_UA}
+    if feed:
+        h['x-fsign'] = 'SW9D1eZo'
+    last = None
+    for _ in range(3):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=40) as r:
+                return r.read().decode('utf-8', errors='ignore')
+        except Exception as e:      # noqa
+            last = e
+    raise last
+
+
+def fs_results(slug):
+    """Partidos terminados de la temporada en curso (los ~100 más recientes): id, día, equipos y marcador."""
+    html = fs_get(f'https://www.flashscore.es/futbol/{slug}/resultados/')
+    out, seen = [], set()
+    for m in re.finditer(r'~AA÷([A-Za-z0-9]{8})¬AD÷(\d+)(.*?)(?=~AA÷|~ZA÷|$)', html, re.S):
+        if m.group(1) in seen:        # la página repite los partidos más recientes
+            continue
+        seen.add(m.group(1))
+        rest = m.group(3)
+        g = lambda k: (re.search('¬' + k + r'÷([^¬]*)', rest) or [None, None])[1]
+        try:
+            hg, ag = int(g('AG')), int(g('AH'))
+        except (TypeError, ValueError):
+            continue
+        if g('AB') != '3' or not g('AE') or not g('AF'):
+            continue
+        ts = int(m.group(2))
+        out.append(dict(id=m.group(1), ts=ts, day=dt.datetime.utcfromtimestamp(ts).date(), h=g('AE'), a=g('AF'), hg=hg, ag=ag))
+    return out
+
+
+def fs_formations(mid):
+    """Dibujo de salida de local y visitante, sin el portero ('3-4-2-1'), o None."""
+    li = fs_get(f'https://global.flashscore.ninja/2/x/feed/df_li_1_{mid}', feed=True)
+    side = sec = None
+    form = {}
+    for blk in li.split('~'):
+        d = dict(x.split('÷', 1) for x in blk.split('¬') if '÷' in x)
+        if 'LB' in d: sec = d['LB']
+        if 'LC' in d: side = d['LC']
+        if 'LD' in d and sec == 'Starting Lineups' and side in ('1', '2'):
+            form.setdefault(side, re.sub(r'^1-', '', d['LD']))
+    return form.get('1'), form.get('2')
+
+
+def build_forms(lg, cur):
+    """{equipo (nombre football-data): [dibujos de sus últimos 3 partidos de liga, del más antiguo al más reciente]}"""
+    from concurrent.futures import ThreadPoolExecutor
+    fs = fs_results(FS_SLUG[lg])
+    if not fs:
+        raise RuntimeError('Flashscore no devuelve partidos')
+    # nombres Flashscore → football-data: partidos con día (±1) y marcador únicos votan la equivalencia
+    idx = {}
+    for r in cur:
+        idx.setdefault((r['hg'], r['ag']), []).append(r)
+    cand = {m['id']: [r for r in idx.get((m['hg'], m['ag']), []) if abs((r['day'] - m['day']).days) <= 1] for m in fs}
+    nm = {}
+    for _ in range(4):            # 1ª vuelta: coincidencias únicas; siguientes: se descartan candidatos incompatibles con lo ya sabido
+        vote, used = {}, set(nm.values())
+        for m in fs:
+            c = [r for r in cand[m['id']]
+                 if nm.get(m['h'], r['h']) == r['h'] and nm.get(m['a'], r['a']) == r['a']
+                 and (m['h'] in nm or r['h'] not in used) and (m['a'] in nm or r['a'] not in used)]
+            if len(c) == 1:
+                vote.setdefault(m['h'], {}).setdefault(c[0]['h'], 0); vote[m['h']][c[0]['h']] += 1
+                vote.setdefault(m['a'], {}).setdefault(c[0]['a'], 0); vote[m['a']][c[0]['a']] += 1
+        new = {k: max(v, key=v.get) for k, v in vote.items()}
+        if new == nm:
+            break
+        nm = new
+    per = {}
+    for m in sorted(fs, key=lambda x: x['ts']):
+        for side, name in ((0, m['h']), (1, m['a'])):
+            if name in nm:
+                per.setdefault(nm[name], []).append((m['id'], side))
+    need = sorted({mid for L in per.values() for mid, _ in L[-N_FORM:]})
+    with ThreadPoolExecutor(8) as ex:
+        got = dict(zip(need, ex.map(lambda i: _safe(fs_formations, i), need)))
+    res = {}
+    for t, L in per.items():
+        fl = [got[mid][side] for mid, side in L[-N_FORM:] if got.get(mid) and got[mid][side]]
+        if fl:
+            res[t] = fl
+    return res
+
+
+def _safe(f, *a):
+    try:
+        return f(*a)
+    except Exception:
+        return None
+
+
+def forms_block(html, R, cur_rows):
+    """Devuelve el bloque JS de dibujos, conservando por liga lo anterior si Flashscore falla."""
+    m = FORM_RE.search(html)
+    if not m:
+        return None, None
+    old = {}
+    g = re.search(r'const FORM_DB = (\{.*?\});\n', m.group(0), re.S)
+    if g:
+        try: old = json.loads(g.group(1))
+        except Exception: old = {}
+    new, fresh = {}, 0
+    for lg, _sfx, _n in LEAGUES:
+        key = APP_KEY.get(lg, lg)
+        try:
+            f = build_forms(lg, cur_rows[lg])
+            teams = set(R[lg]['db'])
+            f = {t: v for t, v in f.items() if t in teams}
+            if len(f) < 0.7 * len(teams):
+                raise RuntimeError(f'sólo {len(f)}/{len(teams)} equipos identificados')
+            new[key] = dict(sorted(f.items())); fresh += 1
+            print(f'  dibujos {lg}: {len(f)}/{len(teams)} equipos')
+        except Exception as e:
+            new[key] = old.get(key, {})
+            print(f'  aviso: dibujos de {lg} no actualizados ({e}); se conservan los anteriores ({len(new[key])} equipos)')
+    date = dt.date.today().isoformat() if fresh else (re.search(r"const FORM_DATE = '([^']*)'", m.group(0)).group(1))
+    body = ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}' for k, v in new.items())
+    block = ("// Dibujos recientes (Flashscore): últimos 3 partidos de liga de cada equipo, del más antiguo al más reciente.\n"
+             f"const FORM_DB = {{\n{body}\n}};\nconst FORM_DATE = '{date}';\n")
+    return block, m
+
 
 def main():
     ap = argparse.ArgumentParser(description='Actualiza la base de equipos de CornerEdge')
@@ -149,7 +291,7 @@ def main():
         if f'const {key} = {{' in m.group(0):
             old_teams[key] = set(re.findall(r'^\s+"([^"]+)":', m.group(0).split(f'const {key} = {{')[1].split('};')[0], re.M))
 
-    R, errs = {}, []
+    R, errs, CUR = {}, [], {}
     for lg, _sfx, nteams in LEAGUES:
         print(f'Descargando {lg} {a.temporada} y {a.previa}…')
         try:
@@ -162,6 +304,7 @@ def main():
             print(f'  aviso: sin temporada previa ({e}); prior = media de la temporada en curso')
             prev = []
         R[lg] = build(cur, prev)
+        CUR[lg] = cur
         errs += validate(lg, R[lg], nteams)
         r = R[lg]
         print(f'  {r["n"]} partidos hasta {r["last"]} · media córners {r["raw_mean"]} (previa {r["prev_mean"]}) '
@@ -180,6 +323,12 @@ def main():
 
     block, last = js_block(R)
     out = html[:m.start()] + block + html[m.end():]
+    try:
+        fblock, fm = forms_block(out, R, CUR)
+        if fblock:
+            out = out[:fm.start()] + fblock + out[fm.end():]
+    except Exception as e:
+        print(f'  aviso: no se actualizaron los dibujos ({e}); la base de córners sí')
     dst = a.salida or re.sub(r'(_base-\d{4}-\d{2}-\d{2})?\.html$', f'_base-{last}.html', a.html)
     if os.path.abspath(dst) == os.path.abspath(a.html):
         shutil.copy(a.html, a.html + '.bak')

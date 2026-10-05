@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#0b0f1a">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<!-- v51: SÓLO PREPARTIDO · ajustes medidos con 21.941 partidos de 12 ligas (árbitro atenuado, lluvia intensa, calor ≥30 °C, tres centrales con tres arriba) a peso completo · fuera el prompt de IA, el vivo/descanso y los factores sin efecto (alineaciones, rotación, parón, fatiga, viento, campo mojado, contexto) · dibujo reciente de cada equipo en la base -->
 <!-- v38: + Premier, Serie A y Bundesliga (validadas minuto a minuto con Flashscore; factor de nivel por liga) -->
 <!-- v37: EN VIVO — minuto/marcador/córners/rojas/1X2 desde Flashscore cada 30 s · alertas con sonido y vibración (valor y situaciones) · cuota mínima para entrar · cuotas caducadas tras córner · funciona sin cuotas -->
 <!-- v36: pestañas para varios partidos a la vez (formulario y resultado por pestaña, guardadas en el navegador) -->
@@ -237,14 +238,14 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 <body>
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
 <header class="hdr">
-  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v50</span></div>
+  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v51</span></div>
   <div class="hdr-right">
     <div class="banca-row">
       <label for="banca">Banca</label>
       <span>€</span>
       <input type="number" id="banca" value="1000" min="10" step="10">
     </div>
-    <button class="tbtn" id="btn-alerts" onclick="toggleAlerts()" title="Sonido, vibración y pantalla encendida">🔕 OFF</button>
+    <button class="tbtn" id="btn-alerts" hidden>🔕 OFF</button>
     <button class="tbtn" onclick="toggleTheme()" title="Cambiar tema">☀ / ☾</button>
   </div>
 </header>
@@ -278,15 +279,16 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
         <div id="db-mode">
           <div class="fl">
             <label class="lbl">Local</label>
-            <select id="sel-loc" onchange="onTeamChange()"><option value="">— Equipo local —</option></select>
+            <select id="sel-loc" onchange="onTeamChange();autoDibujo()"><option value="">— Equipo local —</option></select>
           </div>
           <div class="fl">
             <label class="lbl">Visitante</label>
-            <select id="sel-vis" onchange="onTeamChange()"><option value="">— Equipo visitante —</option></select>
+            <select id="sel-vis" onchange="onTeamChange();autoDibujo()"><option value="">— Equipo visitante —</option></select>
           </div>
           <div id="team-hint" class="note" hidden><span id="team-hint-txt"></span></div>
-          <button class="btn-save" id="btn-link" onclick="openMatchPicker()" style="margin-top:10px">📡 Vincular partido en vivo</button>
-          <div id="live-status"></div>
+          <div id="form-hint" class="note" hidden></div>
+          <button id="btn-link" hidden></button>
+          <div id="live-status" hidden></div>
         </div>
         <div id="man-mode" style="display:none">
           <div class="g2">
@@ -301,23 +303,23 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
     </div>
 
     <div class="card">
-      <div class="ch"><span class="dot"></span>Cuotas 1X2 prepartido (Bet365)</div>
+      <div class="ch"><span class="dot"></span>Cuotas 1X2 (Bet365)</div>
       <div class="cb">
         <div class="g3" style="grid-template-columns:1fr 1fr 1fr">
           <div class="fl"><label class="lbl">1 · Local</label><input type="number" id="o-1" step="0.01" min="1" placeholder="2.10"></div>
           <div class="fl"><label class="lbl">X · Empate</label><input type="number" id="o-x" step="0.01" min="1" placeholder="3.30"></div>
           <div class="fl"><label class="lbl">2 · Visitante</label><input type="number" id="o-2" step="0.01" min="1" placeholder="3.60"></div>
         </div>
-        <div class="note">Miden el nivel de cada equipo (el factor con más peso tras el marcador) y las probabilidades de gol del resto del partido. Usa las de <strong>antes del inicio</strong>, también en vivo. Sin ellas: equipos igualados y goles medios de liga.</div>
+        <div class="note">Miden el nivel de cada equipo y los goles esperados, con los que la app simula cómo irá el marcador. Valen las que haya cuando analices. Sin ellas: equipos igualados y goles medios de liga.</div>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="display:none"><!-- v51: sólo prepartido; los campos siguen en la página con valor 0 -->
       <div class="ch"><span class="dot"></span>Situación actual del partido</div>
       <div class="cb">
         <div class="fl">
           <label class="lbl">Minuto actual <span style="font-weight:400;text-transform:none;letter-spacing:0">(0 = prepartido · 45 = descanso · 90+3 → 93)</span></label>
-          <input type="number" id="minuto" value="45" min="0" max="105" step="1">
+          <input type="number" id="minuto" value="0" min="0" max="105" step="1">
         </div>
         <div class="fl">
           <label class="lbl">Marcador</label>
@@ -350,33 +352,23 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
       <div class="ch"><span class="dot"></span>Árbitro</div>
       <div class="cb">
         <div class="fl">
-          <label class="lbl">Árbitro <span style="font-weight:400;text-transform:none;letter-spacing:0">(se registra; peso en el modelo = REF_WEIGHT)</span></label>
+          <label class="lbl">Árbitro <span style="font-weight:400;text-transform:none;letter-spacing:0">(si aún no se conoce, déjalo sin ajuste)</span></label>
           <select id="sel-ref">
             <option value="">— Desconocido / sin ajuste —</option>
           </select>
         </div>
-        <div class="note">Con ~3.5 partidos por árbitro el error típico (±19%) supera el efecto publicado (±10%). Peso actual en el modelo: <strong id="ref-weight-lbl">0</strong>.</div>
+        <div class="note">Ajuste medido con 21.082 partidos (302 árbitros, 2021-22 a 2026-27) y ya atenuado: de lo que un árbitro se desvía en su historial sólo se mantiene después un 20 %. Rango real: de −2,4 % a +2,8 %.<span id="ref-weight-lbl" hidden></span></div>
       </div>
     </div>
 
     <div class="card">
-      <div class="ch"><span class="dot"></span>Ajuste contextual <span id="qual-badge" class="qual-badge" style="color:var(--ac)">×1.000</span></div>
+      <div class="ch"><span class="dot"></span>Ajustes validados <span id="qual-badge" class="qual-badge" style="color:var(--ac)">×1.000</span></div>
       <div class="cb" style="padding:10px 14px">
         <div id="qual-groups"></div>
-        <div class="note" style="margin-top:8px;font-size:10px;line-height:1.5">Todos los valores son estimaciones sin validar. Se <strong>registran</strong> con cada apuesta; su peso en λ es <strong id="qual-weight-lbl">0</strong> (QUAL_WEIGHT) hasta que la pestaña Analítica muestre que funcionan. Producto limitado a [×0.90, ×1.10].<br>En vivo/descanso: las alineaciones son oficiales y el tiempo es observable — márcalo tú; la IA sólo aporta contexto previo (clasificación, calendario).</div>
+        <div class="note" style="margin-top:8px;font-size:10px;line-height:1.5">Los únicos factores con efecto demostrado en 21.941 partidos de 12 ligas. Se aplican enteros al total de córners.<br><strong>Lluvia:</strong> sólo si llueve con ganas <em>durante</em> el partido (2 mm o más); el campo mojado de antes no cuenta. <strong>Calor:</strong> 30 °C o más a la hora del partido. <strong>Tres centrales:</strong> lo marca la app con los 3 últimos partidos de cada equipo; corrígelo si ha cambiado el entrenador o el dibujo.<span id="qual-weight-lbl" hidden></span></div>
         <div style="display:flex;gap:7px;margin-top:10px;flex-wrap:wrap;">
-          <button class="tbtn" onclick="copyAIPrompt(event)" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px;"><span>📋</span> Copiar prompt para IA</button>
-          <button class="tbtn" onclick="toggleAIImport()" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:5px;"><span>⬇️</span> Importar respuesta IA</button>
           <button class="tbtn" onclick="clearQual()" style="font-size:11px;padding:5px 10px;color:var(--loss)">✕ Limpiar</button>
         </div>
-        <div id="ai-import-box" hidden style="margin-top:8px;">
-          <textarea id="ai-json-input" placeholder='Pega la respuesta de la IA. Formato: {"q-ext-v":{"reason":"…","source":"https://…"}}  ·  {} si no hay datos' style="width:100%;height:80px;background:var(--rsd);border:1px solid var(--bd);border-radius:7px;color:var(--tx);font-family:var(--mono);font-size:11px;padding:8px;resize:vertical;outline:none;line-height:1.4;"></textarea>
-          <div style="display:flex;gap:6px;margin-top:5px;">
-            <button class="tbtn" onclick="applyAIJson()" style="font-size:11px;background:var(--ac);color:#000;font-weight:700;border-color:var(--ac)">Aplicar</button>
-            <span id="ai-import-msg" style="font-size:11px;color:var(--tm);align-self:center;"></span>
-          </div>
-        </div>
-        <div id="ai-reasons" hidden style="margin-top:8px;font-size:11px;line-height:1.5;color:var(--ts);background:var(--rsd);border-radius:7px;padding:8px 10px;"></div>
       </div>
     </div>
 
@@ -403,7 +395,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
     <div id="empty" class="card">
       <div class="empty-hint">
         <span class="icon">⚽</span>
-        Rellena la situación actual<br>y pulsa <strong>Analizar</strong>
+        Elige el partido, mete las cuotas<br>y pulsa <strong>Analizar</strong>
       </div>
     </div>
 
@@ -464,17 +456,17 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
         <div class="ch"><span class="dot"></span>Detalle del Cálculo</div>
         <div class="cb" style="padding:8px 14px">
           <table class="dt">
-            <tr><td>Córners hasta ahora</td><td id="d-cht"></td></tr>
+            <tr style="display:none"><td>Córners hasta ahora</td><td id="d-cht"></td></tr>
             <tr><td>Córners restantes para línea</td><td id="d-crst"></td></tr>
             <tr><td>Base ataque × defensa (90')</td><td id="d-atdef"></td></tr>
             <tr><td>Nivel (1X2 → prob. victoria)</td><td id="d-1x2"></td></tr>
-            <tr><td>Efecto marcador ahora</td><td id="d-state"></td></tr>
-            <tr><td>Rojas</td><td id="d-roj"></td></tr>
-            <tr><td>Minutos restantes (con añadido medio)</td><td id="d-tf"></td></tr>
+            <tr style="display:none"><td>Efecto marcador ahora</td><td id="d-state"></td></tr>
+            <tr style="display:none"><td>Rojas</td><td id="d-roj"></td></tr>
+            <tr style="display:none"><td>Minutos restantes (con añadido medio)</td><td id="d-tf"></td></tr>
             <tr><td>λ local / visitante (modelo)</td><td id="d-lam2"></td></tr>
-            <tr><td>Ritmo en vivo (bayesiano)</td><td id="d-pace"></td></tr>
+            <tr style="display:none"><td>Ritmo en vivo (bayesiano)</td><td id="d-pace"></td></tr>
             <tr><td>Árbitro</td><td id="d-ref"></td></tr>
-            <tr><td>Ajuste contextual</td><td id="d-qual"></td></tr>
+            <tr><td>Ajustes (lluvia, calor, dibujo)</td><td id="d-qual"></td></tr>
             <tr><td>λ mercado (implícito cuotas)</td><td id="d-mkt"></td></tr>
             <tr><td>Probabilidad y colchón</td><td id="d-blend"></td></tr>
             <tr><td>Prob. liquidación</td><td id="d-probs"></td></tr>
@@ -603,7 +595,8 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
       <table class="dt" id="leagues-table" style="width:100%;margin-top:6px"></table>
       <p style="font-size:11px;color:var(--tm);line-height:1.6;margin-top:8px">
         Factor de liga = nivel de córners propio de la liga sobre el modelo, estimado con la narración minuto a minuto de Flashscore (21-22 a 26-27) y validado en el 30% de partidos más recientes, que no se usaron para estimarlo. Championship descartada: sólo el 10% de sus partidos tiene los córners con minuto.<br>
-        <strong>Sin datos suficientes:</strong> rojas × marcador, valor del empate según contexto clasificatorio (los factores cualitativos se registran con peso 0).
+        <strong>v51 · Ajustes medidos con 21.941 partidos (12 ligas, 2021-22 a 2026-27):</strong> árbitro atenuado (±2 %), lluvia intensa durante el partido ×1,03, calor de 30 °C o más ×0,97 y tres centrales con tres arriba ×0,98 por equipo.<br>
+        <strong>Medido y sin efecto sobre el total:</strong> ausencias de extremos, laterales o delantero, rotación masiva, parón internacional, Copa o Europa 3 días antes, tercer partido en 10 días, viento, campo mojado por lluvia previa y contexto clasificatorio.
       </p>
     </div>
   </div>
@@ -679,7 +672,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────────────────────────────────────
-// Base de equipos generada desde football-data.co.uk (córners oficiales), hasta 2026-09-28.
+// Base de equipos generada desde football-data.co.uk (córners oficiales), hasta 2026-10-04.
 // [a favor casa, concedidos casa, a favor fuera, concedidos fuera, PJ casa, PJ fuera, prior temporada previa (1/0)]
 // Temporada en curso + temporada previa del mismo equipo en la misma liga como prior (6 partidos); sin previa → media de liga (3).
 const DB_LL = {
@@ -705,28 +698,28 @@ const DB_LL = {
   "Villarreal": [5.912, 3.754, 4.8, 5.095, 3, 4, 1]
 };
 const DB_S2 = {
-  "Albacete": [5.476, 4.73, 4.786, 5.5, 3, 4, 1],
-  "Almeria": [5.302, 4.46, 3.429, 5.457, 3, 4, 1],
-  "Andorra": [5.771, 2.8, 4.095, 5.873, 4, 3, 1],
-  "Burgos": [3.514, 4.843, 3.714, 5.905, 4, 3, 1],
-  "Cadiz": [5.214, 4.986, 3.222, 4.968, 4, 3, 1],
-  "Castellon": [5.46, 3.603, 6.2, 3.857, 3, 4, 1],
-  "Celta B": [4.303, 3.905, 3.89, 5.187, 4, 3, 0],
-  "Ceuta": [5.514, 3.9, 3.492, 4.254, 4, 3, 1],
+  "Albacete": [5.529, 4.257, 4.786, 5.5, 4, 4, 1],
+  "Almeria": [5.571, 4.314, 3.429, 5.457, 4, 4, 1],
+  "Andorra": [5.771, 2.8, 3.686, 6.386, 4, 4, 1],
+  "Burgos": [3.514, 4.843, 3.643, 6.114, 4, 4, 1],
+  "Cadiz": [5.195, 4.896, 3.222, 4.968, 5, 3, 1],
+  "Castellon": [5.214, 3.943, 6.2, 3.857, 4, 4, 1],
+  "Celta B": [4.31, 3.918, 4.204, 5.31, 4, 4, 0],
+  "Ceuta": [5.514, 3.9, 3.843, 4.129, 4, 4, 1],
   "Cordoba": [6.302, 2.984, 5.586, 4.114, 3, 4, 1],
-  "Eibar": [4.871, 3.743, 3.063, 6.286, 4, 3, 1],
-  "Eldense": [6.021, 4.223, 5.334, 4.018, 3, 4, 0],
-  "Girona": [5.018, 4.191, 3.223, 3.854, 4, 3, 0],
-  "Granada": [6.111, 3.905, 3.6, 4.971, 3, 4, 1],
-  "Las Palmas": [4.714, 4.032, 4.014, 4.529, 3, 4, 1],
-  "Leganes": [4.889, 4.476, 3.229, 5.571, 3, 4, 1],
-  "Mallorca": [4.303, 3.905, 4.056, 5.354, 4, 3, 0],
-  "Oviedo": [5.875, 3.763, 3.556, 4.854, 4, 3, 0],
-  "Sabadell": [4.354, 3.39, 5.334, 3.875, 3, 4, 0],
-  "Sociedad B": [3.873, 4.794, 3.657, 6.3, 3, 4, 1],
-  "Sp Gijon": [4.443, 4.629, 3.603, 5.778, 4, 3, 1],
-  "Tenerife": [4.018, 3.763, 3.89, 4.021, 4, 3, 0],
-  "Valladolid": [4.73, 3.143, 4.443, 4.043, 3, 4, 1]
+  "Eibar": [4.871, 3.743, 2.757, 6.257, 4, 4, 1],
+  "Eldense": [6.024, 4.775, 5.346, 4.024, 4, 4, 0],
+  "Girona": [5.021, 4.553, 3.237, 3.862, 5, 3, 0],
+  "Granada": [6.111, 3.905, 3.909, 4.61, 3, 5, 1],
+  "Las Palmas": [4.543, 4.229, 4.014, 4.529, 4, 4, 1],
+  "Leganes": [4.889, 4.476, 3.299, 5.519, 3, 5, 1],
+  "Mallorca": [4.31, 3.918, 4.489, 5.31, 4, 4, 0],
+  "Oviedo": [5.881, 3.775, 4.204, 5.024, 4, 4, 0],
+  "Sabadell": [5.31, 2.918, 5.346, 3.881, 4, 4, 0],
+  "Sociedad B": [3.586, 5.014, 3.657, 6.3, 4, 4, 1],
+  "Sp Gijon": [4.584, 4.753, 3.603, 5.778, 5, 3, 1],
+  "Tenerife": [4.024, 3.775, 3.904, 4.028, 4, 3, 0],
+  "Valladolid": [4.73, 3.143, 4.584, 3.948, 3, 5, 1]
 };
 const DB_E0 = {
   "Arsenal": [6.046, 2.796, 4.982, 3.784, 2, 3, 1],
@@ -933,7 +926,7 @@ const DB_SC0 = {
   "St Mirren": [5.516, 5.632, 4.795, 6.889, 4, 3, 1]
 };
 const LG_LL = {"hf": 5.385, "vf": 4.276}, GOALS_LL = [1.595, 1.154];
-const LG_S2 = {"hf": 5.041, "vf": 4.113}, GOALS_S2 = [1.442, 1.173];
+const LG_S2 = {"hf": 5.056, "vf": 4.142}, GOALS_S2 = [1.45, 1.175];
 const LG_E0 = {"hf": 5.281, "vf": 4.562}, GOALS_E0 = [1.526, 1.233];
 const LG_I1 = {"hf": 5.007, "vf": 3.983}, GOALS_I1 = [1.3, 1.181];
 const LG_D1 = {"hf": 5.613, "vf": 4.356}, GOALS_D1 = [1.842, 1.453];
@@ -944,62 +937,39 @@ const LG_D2 = {"hf": 5.44, "vf": 4.9}, GOALS_D2 = [1.647, 1.342];
 const LG_N1 = {"hf": 5.737, "vf": 4.714}, GOALS_N1 = [1.786, 1.499];
 const LG_B1 = {"hf": 5.472, "vf": 4.632}, GOALS_B1 = [1.479, 1.241];
 const LG_SC0 = {"hf": 5.654, "vf": 4.758}, GOALS_SC0 = [1.526, 1.219];
-const DB_DATE = '2026-09-28';
+const DB_DATE = '2026-10-04';
+// Dibujos recientes (Flashscore): últimos 3 partidos de liga de cada equipo, del más antiguo al más reciente.
+const FORM_DB = {
+  "ll": {"Alaves": ["3-5-2", "3-5-2", "5-3-2"], "Ath Bilbao": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Ath Madrid": ["3-4-2-1", "4-4-2", "4-4-2"], "Barcelona": ["4-3-3", "4-3-3", "4-3-3"], "Betis": ["4-2-3-1", "4-2-3-1", "4-3-3"], "Celta": ["3-4-3", "3-4-3", "3-4-3"], "Elche": ["4-4-1-1", "4-5-1", "4-3-3"], "Espanol": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Getafe": ["4-4-2", "4-1-4-1", "4-5-1"], "La Coruna": ["4-1-3-2", "4-4-2", "4-4-2"], "Levante": ["4-1-4-1", "4-4-2", "4-3-3"], "Malaga": ["4-1-4-1", "4-1-4-1", "4-1-4-1"], "Osasuna": ["4-2-3-1", "5-4-1", "5-4-1"], "Real Madrid": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Santander": ["4-2-3-1", "4-1-3-2", "4-1-4-1"], "Sevilla": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Sociedad": ["4-4-2", "4-2-3-1", "4-4-2"], "Valencia": ["4-4-1-1", "4-2-3-1", "4-4-2"], "Vallecano": ["4-2-3-1", "4-2-3-1", "4-3-3"], "Villarreal": ["4-4-2", "4-4-2", "4-2-3-1"]},
+  "s2": {"Albacete": ["4-4-2", "4-4-2", "4-4-2"], "Almeria": ["4-2-3-1", "4-2-3-1", "4-3-3"], "Andorra": ["4-3-3", "4-3-3", "4-5-1"], "Burgos": ["4-4-2", "4-4-2", "4-2-3-1"], "Cadiz": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Castellon": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Celta B": ["3-4-3", "3-4-3", "3-4-3"], "Ceuta": ["4-3-3", "4-2-3-1", "3-4-2-1"], "Cordoba": ["4-3-3", "4-3-3", "4-3-3"], "Eibar": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Eldense": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Girona": ["4-4-2", "4-2-3-1", "4-2-3-1"], "Granada": ["4-2-3-1", "4-2-3-1", "3-5-2"], "Las Palmas": ["4-2-3-1", "4-4-2", "4-2-3-1"], "Leganes": ["3-2-4-1", "3-5-2", "3-4-2-1"], "Mallorca": ["4-4-1-1", "4-3-3", "4-1-3-2"], "Oviedo": ["4-2-3-1", "4-2-3-1", "4-1-2-1-2"], "Sabadell": ["4-4-2", "3-5-2", "4-4-2"], "Sociedad B": ["4-2-3-1", "4-4-2", "4-2-3-1"], "Sp Gijon": ["3-4-2-1", "4-4-2", "3-4-3"], "Tenerife": ["4-4-2", "4-4-2", "4-4-2"], "Valladolid": ["4-2-3-1", "4-1-3-2", "4-1-3-2"]},
+  "E0": {"Arsenal": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Aston Villa": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Bournemouth": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Brentford": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Brighton": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Chelsea": ["3-4-2-1", "4-2-3-1", "3-4-2-1"], "Coventry": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Crystal Palace": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Everton": ["4-2-3-1", "4-1-4-1", "4-2-3-1"], "Fulham": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Hull": ["5-4-1", "5-4-1", "5-4-1"], "Ipswich": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Leeds": ["3-5-2", "3-5-2", "3-4-2-1"], "Liverpool": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Man City": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Man United": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Newcastle": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Nott'm Forest": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Sunderland": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Tottenham": ["4-2-3-1", "4-2-3-1", "4-2-3-1"]},
+  "I1": {"Atalanta": ["4-3-3", "4-3-3", "4-3-3"], "Bologna": ["4-2-3-1", "4-2-3-1", "3-4-3"], "Cagliari": ["4-3-2-1", "4-4-1-1", "5-3-2"], "Como": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Fiorentina": ["4-3-3", "4-2-3-1", "4-3-3"], "Frosinone": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Genoa": ["3-4-1-2", "3-5-2", "3-4-2-1"], "Inter": ["3-5-2", "3-5-2", "3-1-4-2"], "Juventus": ["4-2-3-1", "4-2-3-1", "3-4-2-1"], "Lazio": ["4-3-3", "4-3-3", "4-3-3"], "Lecce": ["4-2-3-1", "4-3-3", "4-3-3"], "Milan": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Monza": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Napoli": ["4-3-3", "4-2-3-1", "4-2-3-1"], "Parma": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Roma": ["3-4-1-2", "3-4-2-1", "3-4-2-1"], "Sassuolo": ["4-3-3", "4-2-3-1", "4-3-3"], "Torino": ["3-1-4-2", "5-3-2", "3-5-2"], "Udinese": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Venezia": ["3-5-2", "3-5-2", "3-5-2"]},
+  "D1": {"Augsburg": ["5-3-2", "3-4-2-1", "3-4-2-1"], "Bayern Munich": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Dortmund": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Ein Frankfurt": ["4-4-2", "3-4-2-1", "4-4-2"], "Elversberg": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "FC Koln": ["4-3-3", "4-2-3-1", "4-2-3-1"], "Freiburg": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Hamburg": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Hoffenheim": ["4-4-2", "4-2-3-1", "4-4-2"], "Leverkusen": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "M'gladbach": ["4-2-3-1", "4-4-2", "3-4-2-1"], "Mainz": ["3-5-2", "3-1-4-2", "3-5-2"], "Paderborn": ["3-1-4-2", "3-1-4-2", "3-5-2"], "RB Leipzig": ["4-3-3", "4-3-3", "4-2-3-1"], "Schalke 04": ["5-4-1", "3-4-2-1", "3-4-2-1"], "Stuttgart": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Union Berlin": ["4-1-2-1-2", "4-1-2-1-2", "4-2-3-1"], "Werder Bremen": ["4-2-3-1", "4-2-3-1", "3-4-3"]},
+  "F1": {"Angers": ["4-2-3-1", "4-2-3-1", "4-4-2"], "Auxerre": ["4-2-3-1", "3-4-3", "3-4-3"], "Brest": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Le Havre": ["3-4-2-1", "4-3-3", "3-4-2-1"], "Le Mans": ["3-1-4-2", "3-1-4-2", "3-1-4-2"], "Lens": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Lille": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Lorient": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Lyon": ["4-3-2-1", "4-2-3-1", "4-2-3-1"], "Marseille": ["4-1-4-1", "4-1-4-1", "4-4-2"], "Monaco": ["4-2-3-1", "4-2-3-1", "4-4-2"], "Nice": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Paris FC": ["3-4-2-1", "4-2-3-1", "4-2-3-1"], "Paris SG": ["4-1-2-1-2", "4-3-3", "4-3-3"], "Rennes": ["4-1-4-1", "4-1-4-1", "4-1-4-1"], "Strasbourg": ["4-3-3", "4-3-3", "4-1-4-1"], "Toulouse": ["4-2-3-1", "4-2-3-1", "4-4-2"], "Troyes": ["4-2-3-1", "4-2-3-1", "4-2-3-1"]},
+  "P1": {"Academico Viseu": ["4-1-4-1", "4-1-4-1", "4-2-3-1"], "Alverca": ["3-4-3", "3-4-3", "3-4-3"], "Arouca": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Benfica": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Casa Pia": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Estoril": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Estrela": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Famalicao": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Gil Vicente": ["4-2-3-1", "5-4-1", "4-2-3-1"], "Guimaraes": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Maritimo": ["4-3-3", "4-3-3", "4-2-3-1"], "Moreirense": ["4-2-3-1", "4-2-3-1", "3-4-2-1"], "Nacional": ["3-4-2-1", "4-2-3-1", "4-1-4-1"], "Porto": ["4-3-3", "4-3-3", "4-3-3"], "Rio Ave": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Santa Clara": ["4-3-3", "4-3-3", "4-3-3"], "Sp Braga": ["3-4-3", "3-4-3", "3-4-3"], "Sp Lisbon": ["4-2-3-1", "4-2-3-1", "4-2-3-1"]},
+  "E1": {"Birmingham": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Blackburn": ["4-2-3-1", "5-4-1", "5-4-1"], "Bolton": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Bristol City": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Burnley": ["4-2-3-1", "4-2-3-1", "4-4-2"], "Cardiff": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Charlton": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Derby": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Lincoln": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Middlesbrough": ["4-2-3-1", "4-2-3-1", "3-4-2-1"], "Millwall": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Norwich": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Portsmouth": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Preston": ["5-3-2", "4-4-2", "5-3-2"], "QPR": ["4-4-2", "4-2-3-1", "4-4-2"], "Sheffield United": ["4-4-2", "3-4-3", "3-4-2-1"], "Southampton": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Stoke": ["3-5-2", "3-4-2-1", "3-4-3"], "Swansea": ["4-3-3", "4-3-3", "4-3-3"], "Watford": ["4-1-4-1", "4-2-3-1", "4-4-2"], "West Brom": ["4-4-2", "4-2-3-1", "4-4-2"], "West Ham": ["4-4-1-1", "4-4-2", "4-4-2"], "Wolves": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Wrexham": ["3-4-2-1", "3-4-2-1", "3-4-2-1"]},
+  "D2": {"Bielefeld": ["4-1-4-1", "4-3-3", "4-2-3-1"], "Bochum": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Braunschweig": ["4-1-4-1", "4-1-4-1", "4-2-3-1"], "Cottbus": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Darmstadt": ["4-2-3-1", "4-4-2", "4-2-3-1"], "Dresden": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Greuther Furth": ["4-4-2", "4-4-2", "4-4-2"], "Hannover": ["3-4-3", "3-1-4-2", "4-1-3-2"], "Heidenheim": ["4-4-2", "4-4-1-1", "4-4-2"], "Hertha": ["4-2-3-1", "4-2-3-1", "4-4-2"], "Holstein Kiel": ["4-5-1", "4-1-4-1", "4-1-4-1"], "Kaiserslautern": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Karlsruhe": ["4-2-3-1", "4-4-2", "4-4-2"], "Magdeburg": ["4-3-3", "4-3-3", "4-3-3"], "Nurnberg": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Osnabruck": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "St Pauli": ["3-4-2-1", "4-1-3-2", "4-1-3-2"], "Wolfsburg": ["4-3-3", "4-3-3", "4-2-3-1"]},
+  "N1": {"AZ Alkmaar": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Ajax": ["4-3-3", "4-3-3", "4-3-3"], "Cambuur": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Den Haag": ["4-2-3-1", "4-4-2", "4-4-2"], "Excelsior": ["3-4-3", "4-1-4-1", "4-3-3"], "Feyenoord": ["4-3-3", "4-3-3", "4-3-3"], "For Sittard": ["5-3-2", "5-4-1", "4-3-3"], "Go Ahead Eagles": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Groningen": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Heerenveen": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Nijmegen": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "PSV Eindhoven": ["4-2-3-1", "4-3-3", "4-2-3-1"], "Sparta Rotterdam": ["4-2-3-1", "3-4-2-1", "4-2-3-1"], "Telstar": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Twente": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Utrecht": ["3-4-3", "5-4-1", "5-4-1"], "Willem II": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Zwolle": ["4-2-3-1", "4-2-3-1", "4-1-4-1"]},
+  "B1": {"Anderlecht": ["4-4-2", "4-4-2", "4-4-2"], "Antwerp": ["4-4-2", "4-4-2", "4-2-3-1"], "Beveren": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Cercle Brugge": ["3-4-2-1", "3-4-2-1", "5-3-2"], "Charleroi": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Club Brugge": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Genk": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Gent": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Kortrijk": ["3-4-2-1", "3-1-4-2", "4-4-2"], "Lommel SK": ["4-1-4-1", "4-1-4-1", "4-1-4-1"], "Mechelen": ["3-4-2-1", "3-4-1-2", "3-4-2-1"], "Oud-Heverlee Leuven": ["3-1-4-2", "3-4-3", "3-5-2"], "RAAL La Louviere": ["3-4-3", "3-4-3", "3-5-1-1"], "St Truiden": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "St. Gilloise": ["3-4-1-2", "3-4-1-2", "3-1-4-2"], "Standard": ["4-3-3", "4-3-3", "4-3-3"], "Waregem": ["4-3-3", "4-3-2-1", "4-3-3"], "Westerlo": ["4-2-3-1", "4-2-3-1", "4-2-3-1"]},
+  "SC0": {"Aberdeen": ["4-1-3-2", "5-3-2", "3-5-2"], "Celtic": ["4-2-3-1", "4-2-3-1", "3-4-2-1"], "Dundee": ["4-4-2", "4-4-2", "4-4-2"], "Dundee United": ["4-3-3", "4-3-3", "4-3-3"], "Falkirk": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Hearts": ["4-2-3-1", "4-2-3-1", "4-4-2"], "Hibernian": ["4-1-4-1", "3-1-4-2", "3-4-1-2"], "Kilmarnock": ["4-1-3-2", "4-2-3-1", "4-2-3-1"], "Motherwell": ["4-2-3-1", "4-2-2-2", "4-2-3-1"], "Rangers": ["4-2-3-1", "4-2-3-1", "4-4-1-1"], "St Johnstone": ["4-3-3", "4-2-3-1", "4-2-3-1"], "St Mirren": ["4-2-3-1", "5-4-1", "4-2-3-1"]}
+};
+const FORM_DATE = '2026-10-05';
 
-// DB_REFS_LL — calibrado 26-27 J1-J7 (69 partidos, media=9.56)
-const DB_REFS_LL = {
-  "Munuera Montero":      1.10,
-  "García Verdura":       1.08,
-  "Soto Grado":           1.07,
-  "Martínez Munuera":     1.05,
-  "Ortiz Arias":          1.05,
-  "Hernández Maeso":      1.02,
-  "Alberola Rojas":       1.02,
-  "Busquets Ferrer":      1.01,
-  "Hernández Hernández":  1.01,
-  "Quintero González":    1.00,
-  "Sesma Espinosa":       1.00,
-  "Díaz de Mera":         0.98,
-  "Bestard Servera":      0.98,
-  "Cordero Vega":         0.98,
-  "Orellana Cid":         0.95,
-  "Muñiz Muñoz":          0.95,
-  "De Burgos Bengoetxea": 0.94,
-  "Sánchez Martínez":     0.93,
-  "González Esteban":     0.91,
-  "Gil Manzano":          0.91,
-};
-// DB_REFS_S2 — calibrado 26-27 J1-J6 (66 partidos, media=8.33)
-const DB_REFS_S2 = {
-  "Mallo Fernández":      1.10,
-  "Sánchez Villalobos":   1.10,
-  "Morales Moreno":       1.10,
-  "Palencia Caballero":   1.07,
-  "Guzmán Mansilla":      1.07,
-  "Ojaos Valera":         1.05,
-  "Cuadra Fernández":     1.05,
-  "Etayo Herrera":        1.01,
-  "Muñiz Ruiz":           1.03,
-  "López Toca":           1.01,
-  "Arcediano Monescillo": 1.00,
-  "Cid Camacho":          1.00,
-  "Huerta de Haza":       1.00,
-  "De la Fuente Ramos":   1.00,
-  "Moreno Aragón":        1.00,
-  "Muresan":              1.00,
-  "Gordillo Escamilla":   0.99,
-  "Galech Apezteguía":    0.98,
-  "Mir Andalucía":        0.98,
-  "Morilla Turrión":      0.98,
-  "Lax Franco":           0.95,
-  "Romero Freixas":       0.95,
-  "Sánchez López":        0.94,
-  "Ais Reig":             0.93,
-  "Fuentes Molina":       0.93,
-  "Domínguez Cervantes":  0.93,
-  "Pérez Hernández":      0.91,
-  "Rivera Olmedo":        0.91,
-};
+// v51 · Árbitros: multiplicador ya atenuado (bayes empírico: τ=2,0 %, φ=1,14) con 21.082 partidos, 2021-22 a 2026-27.
+//   Sólo árbitros con partidos en 2025-26 o 2026-27 en esa liga. Nombres de Flashscore; en España, los dos apellidos.
+const REFS_V51 = {"B1":{"Allaerts M.":1.001,"Araki Y.":0.998,"Boterberg J.":1.005,"Bourdeaud'hui S.":1.008,"D'hondt L.":0.995,"De Cremer W.":0.984,"Laforge N.":0.996,"Lambrechts E.":0.993,"Ledda M.":0.999,"Letellier A.":0.996,"Put B.":0.993,"Smet W.":0.999,"van Damme K.":1.025,"Van Driessche B.":0.991,"Verbeke B.":1.0,"Verboomen N.":1.001,"Vergoote J.":1.018,"Visser L.":0.993},
+  "D1":{"Aytekin D.":1.014,"Badstubner F.":0.979,"Brand B.":1.005,"Braun R.":0.979,"Burda M.":0.996,"Dankert B.":0.993,"Dingert C.":0.998,"Exner F.":1.02,"Gerach T.":1.006,"Hartmann R.":1.006,"Hempel R.":1.009,"Ittrich P.":1.005,"Jablonski S.":1.008,"Jollenbeck M.":1.007,"Osmers H.":0.991,"Petersen M.":1.015,"Reichel T.":0.98,"Schlager D.":1.003,"Schroder R.":1.016,"Siebert D.":0.998,"Stegemann S.":0.995,"Stieler T.":0.998,"Storks S.":1.003,"Welz T.":1.008,"Willenborg F.":1.0,"Zwayer F.":1.001},
+  "D2":{"Alt P.":0.991,"Aytekin D.":1.014,"Bacher M.":1.008,"Badstubner F.":0.979,"Ballweg C.":0.997,"Bauer T.":1.002,"Benen L.":0.999,"Bickel F.":1.0,"Brand B.":1.005,"Braun R.":0.979,"Burda M.":0.996,"Dankert B.":0.993,"Dingert C.":0.998,"Eckermann M. P.":0.993,"Erbst L.":1.007,"Exner F.":1.02,"Gansloweit T.":0.997,"Gerach T.":1.006,"Hartmann R.":1.006,"Haslberger W.":1.002,"Hasmann J.":1.002,"Hempel R.":1.009,"Ittrich P.":1.005,"Jollenbeck M.":1.007,"Kampka R.":1.005,"Lechner F.":1.002,"Oldhafer K.":1.002,"Osmers H.":0.991,"Petersen M.":1.015,"Prigan F.":0.981,"Reichel T.":0.98,"Schlager D.":1.003,"Schroder R.":1.016,"Schwengers P.":0.99,"Stegemann S.":0.995,"Stieler T.":0.998,"Storks S.":1.003,"Wagner F.":1.0,"Weisbach E.":1.002,"Weller F.":1.001,"Welz T.":1.008,"Wienefeld J.":0.998,"Willenborg F.":1.0},
+  "E0":{"Attwell S.":0.994,"Bankes P.":1.007,"Barrott S.":0.997,"Bramall T.":0.99,"Brooks J.":1.001,"Donohue M.":0.991,"England D.":0.992,"Gillett J.":1.013,"Hallam F.":0.994,"Harrington T.":1.0,"Herczeg A.":0.999,"Hooper S.":0.994,"Jones R.":0.998,"Kavanagh C.":1.02,"Kirk T.":1.006,"Kitchen A.":1.002,"Madley A.":1.021,"Oliver M.":1.001,"Pawson C.":0.981,"Robinson T.":0.995,"Salisbury M.":0.991,"Smith J.":1.0,"Taylor A.":0.999,"Tierney P.":0.977},
+  "E1":{"Allison S.":0.994,"Backhouse A.":1.003,"Bell E.":0.992,"Bell J.":1.002,"Bramall T.":0.99,"Brooks J.":1.001,"Busby J.":1.02,"Corlett M.":1.003,"Donohue M.":0.991,"Doughty L.":1.014,"Duckworth E.":0.998,"Finnie W.":1.003,"Hallam F.":0.994,"Harrington T.":1.0,"Herczeg A.":0.999,"Jones R.":0.998,"Kirk T.":1.006,"Kitchen A.":1.002,"Langford O.":0.999,"Linington J.":1.018,"Madley A.":1.021,"Madley R.":1.001,"Martin S.":0.997,"Miles J.":1.002,"Nield T.":0.992,"Parsons T.":1.0,"Reeves T.":1.003,"Ricardo R.":0.997,"Robinson T.":0.995,"Salisbury M.":0.991,"Smith J.":1.0,"Smith L.":1.012,"Speedie B.":1.006,"Tierney P.":0.977,"Toner B.":0.996,"Ward G.":0.991,"Webb D.":0.998,"Whitestone D.":0.99},
+  "F1":{"Angoula G.":1.027,"Bastien B.":0.995,"Ben El Hadj Salem H.":1.017,"Bollengier M.":0.993,"Brisard J.":1.003,"Buquet R.":0.991,"Dechepy B.":0.992,"Delajod W.":1.006,"Frappart S.":0.99,"Kherradji A.":0.994,"Kubler G.":1.001,"Leonard T.":1.005,"Letexier F.":1.011,"Lissorgue R.":1.001,"Millot B.":1.005,"Paradis G.":0.999,"Petit A.":1.0,"Pignard J.":1.009,"Souifi A.":1.001,"Stinat J.":0.991,"Turpin C.":0.998,"Vernice M.":0.989,"Wattellier E.":0.994},
+  "I1":{"Abisso R.":0.999,"Allegretta C. G.":0.999,"Arena A.":0.999,"Ayroldi G.":0.993,"Bonacina K.":1.004,"Calzavara A.":1.0,"Caputi M.":0.992,"Chiffi D.":0.994,"Collu G.":0.997,"Colombo A.":0.997,"Crezzini V.":0.997,"Di Bello M.":1.004,"Di Marco D.":1.003,"Dionisi F.":1.002,"Doveri D.":1.008,"Fabbri M.":0.996,"Feliciani E.":0.996,"Fourneau F.":0.998,"Guida M.":1.015,"La Penna F.":0.989,"Manganiello G.":0.996,"Marcenaro M.":1.008,"Marchetti M.":0.992,"Maresca F.":1.011,"Mariani M.":1.0,"Marinelli L.":1.002,"Massa D.":0.989,"Massimi L.":0.997,"Mucera G.":1.001,"Pairetto L.":0.996,"Perenzoni D.":0.994,"Perri M.":0.998,"Pezzuto I.":1.005,"Piccinini M.":0.995,"Rapuano A.":1.0,"Sacchi J. L.":1.004,"Sozza S.":1.001,"Tremolada P.":1.002,"Zufferli L.":1.005},
+  "N1":{"Blank E.":1.006,"Bos A.":0.998,"Dieperink R.":1.005,"Gozubuyuk S.":0.976,"Hensgens R.":1.0,"Higler D.":1.003,"Kooij J.":0.996,"Lindhout A.":0.999,"Makkelie D.":0.992,"Manschot J.":0.999,"Martens R.":1.015,"Nagtegaal M.":0.999,"Nijhuis B.":1.007,"Oostrom I.":0.994,"Teuben S.":1.003,"van de Graaf E.":1.011,"van den Kerkhof M.":1.003,"van der Eijk S.":0.983,"van der Laan J.":1.015,"Vandeursen F.":1.001,"Vos M.":1.0},
+  "P1":{"Baixinho R.":1.009,"Bessa J.":1.003,"Branco Godinho L. M.":0.995,"Carvalho H.":0.991,"Correia G.":0.993,"Costa B. J.":1.003,"Ferreira V.":1.0,"Filipe L.":1.002,"Fonseca M.":0.996,"Goncalves J.":1.011,"Guelho S.":0.988,"Macedo C.":0.996,"Malheiro H.":1.007,"Melo F.":1.002,"Narciso A.":0.995,"Nobre A.":0.997,"Nogueira M.":1.009,"Pereira C.":1.012,"Pinheiro J.":0.99,"Ramalho P.":0.996,"Rodrigues A.":1.002,"Rosa D.":1.001,"Silva D.":1.01,"Torres M.":1.002,"Vasilica I.":1.001,"Verissimo F.":1.0},
+  "SC0":{"Beaton J.":1.006,"Clancy K.":1.01,"Dickinson D.":1.002,"Graham C.":0.995,"Hardie R.":0.991,"Irvine G.":1.007,"Lee R.":1.003,"MacDermid M.":1.01,"McFarlane D.":0.996,"McLean S.":1.001,"Nicolson D.":0.995,"Robertson D.":1.001,"Scott C.":1.008,"Steven C.":0.988,"Walsh N.":0.996,"Wilson L.":1.009},
+  "ll":{"Alberola Rojas":1.003,"Bestard Servera":0.999,"Busquets Ferrer":1.004,"Cordero Vega":1.003,"Cuadra Fernández":0.998,"De Burgos Bengoetxea":1.005,"Díaz de Mera":0.997,"Galech Apezteguía":1.002,"García Verdura":0.994,"Gil Manzano":1.019,"González Esteban":1.005,"Guzmán Mansilla":1.006,"Hernández Hernández":1.003,"Hernández Maeso":1.008,"Martínez Munuera":0.991,"Munuera Montero":1.005,"Muñiz Muñoz":0.999,"Muñiz Ruiz":0.989,"Orellana Cid":1.001,"Ortiz Arias":1.028,"Quintero González":0.98,"Sesma Espinosa":0.997,"Soto Grado":1.006,"Sánchez Martínez":0.986},
+  "s2":{"Ais Reig":0.993,"Arcediano Monescillo":0.992,"Bestard Servera":0.999,"Cid Camacho":0.994,"De Ena Wolf":1.003,"Domínguez Cervantes":0.998,"Etayo Herrera":1.009,"Fuentes Molina":0.998,"Galech Apezteguía":1.002,"Gonzalez M.":0.991,"González Esteban":1.005,"Gordillo Escamilla":1.0,"Guzmán Mansilla":1.006,"Huerta de Aza":1.005,"Lax Franco":1.005,"Mallo Fernández":1.017,"Miranda D.":0.999,"Morales Moreno":1.003,"Moreno Aragón":1.004,"Morilla Turrión":0.99,"Muresan":0.994,"Muñiz Muñoz":0.999,"Ojaos Valera":1.0,"Orellana Cid":1.001,"Palencia Caballero":1.0,"Pérez Hernández":0.99,"Rivera Olmedo":0.999,"Romero Freixas":0.999,"Sánchez López":1.004,"Sánchez Villalobos":0.986}};
+const DB_REFS_LL = REFS_V51.ll, DB_REFS_S2 = REFS_V51.s2;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BETS STORAGE
@@ -1075,34 +1045,37 @@ let sortCol = 'fecha', sortDir = -1;
 // ─────────────────────────────────────────────────────────────────────────────
 const LEAGUES = {
   ll: {name: 'LaLiga', short: 'La Liga', full: 'LaLiga EA Sports (Primera División de España)', db: DB_LL, lg: LG_LL, goals: GOALS_LL, refs: DB_REFS_LL,
-       lf: [1, 1], rf: [80, 40], fs: 'SPAIN: LaLiga', check: 'modelo estimado aquí (639 partidos)', tags: '#LaLiga #Corners', mention: '@LaLiga'},
+       lf: [1.002, 1.002], rf: [80, 40], fs: 'SPAIN: LaLiga', check: 'modelo estimado aquí (639 partidos)', tags: '#LaLiga #Corners', mention: '@LaLiga'},
   s2: {name: 'Hypermotion', short: 'Segunda', full: 'LaLiga Hypermotion (Segunda División de España)', db: DB_S2, lg: LG_S2, goals: GOALS_S2, refs: DB_REFS_S2,
        lf: [1, 1], rf: [85, 40], fs: 'SPAIN: LaLiga2', check: 'validada prepartido (2.376 partidos, 5 temporadas: nivel ×0,997) · dispersión r=85', tags: '#Hypermotion #LaLiga2 #Corners', mention: '@LaLiga2'},
   E0: {name: 'Premier', short: 'Premier', full: 'Premier League (Inglaterra)', db: DB_E0, lg: LG_E0, goals: GOALS_E0, refs: {},
-       lf: [1.064, 1.064], rf: [90, 150], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.064 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
+       lf: [1.069, 1.069], rf: [90, 150], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ENGLAND: Premier League', check: 'validada minuto a minuto (617 partidos) · nivel ×1.064 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#PremierLeague #Corners', mention: '@premierleague'},
   I1: {name: 'Serie A', short: 'Serie A', full: 'Serie A (Italia)', db: DB_I1, lg: LG_I1, goals: GOALS_I1, refs: {},
-       lf: [1.001, 1.001], rf: [50, 70], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×1.001 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
+       lf: [1.008, 1.008], rf: [50, 70], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'ITALY: Serie A', check: 'validada minuto a minuto (646 partidos) · nivel ×1.001 (prepartido, 1.950 partidos) · marcador local/visitante ajustado (v41)', tags: '#SerieA #Corners', mention: '@SerieA'},
   D1: {name: 'Bundesliga', short: 'Bundesliga', full: 'Bundesliga (Alemania)', db: DB_D1, lg: LG_D1, goals: GOALS_D1, refs: {},
-       lf: [1.004, 1.059], rf: [90, 55], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
+       lf: [1.016, 1.072], rf: [90, 55], sx: {dm2_home: -0.17316, dp2_away: -0.16842}, fs: 'GERMANY: Bundesliga', check: 'validada con reservas (591 partidos) · nivel ×1.004 / 1.059 · marcador local/visitante ajustado (v41) · su nivel varía entre temporadas',
        warn: true, tags: '#Bundesliga #Corners', mention: '@Bundesliga'},
 };
+// v51 · Nivel de cada liga ×(1/media de los ajustes en 2024-27) para que la media de la liga no baje al aplicar dibujo, lluvia y calor:
+//   LaLiga 1,002 · Hypermotion 1,000 · Premier 1,004 · Serie A 1,007 · Bundesliga 1,012 · Ligue 1 1,008 · Portugal 1,009 · Championship 1,003 · 2. Bundesliga 1,009 · Eredivisie 1,001 · Bélgica 1,006 · Escocia 1,003
 // v49 · LIGAS NUEVAS (validadas sólo PREPARTIDO con football-data: 7.239 partidos de 10 ligas, 2024-25 a 2026-27).
 //   Nivel = córners reales / modelo en prepartido; dispersión r estimada por momentos.
 //   v50 · Descanso validado con 3.188 partidos de Flashscore (córners por partes): reacción al ritmo r=100 (verosimilitud plana entre 70 y 150).
 //   Se añaden sólo si su base existe (si la actualización semanal usara un script antiguo, la app no se rompe).
 [
-  ['F1',  'DB_F1',  'Ligue 1',       'Ligue 1',       'Ligue 1 (Francia)',             [1, 1],         [41, 100], 'FRANCE: Ligue 1',             'prepartido: 657 partidos · nivel ×1,005 (sin ajuste) · descanso validado (464 partidos; Under real−app +1,4 pts)', '#Ligue1 #Corners', '@Ligue1'],
-  ['P1',  'DB_P1',  'Portugal',      'Portugal',      'Liga Portugal (Portugal)',      [1, 1],         [70, 100], 'PORTUGAL: Liga Portugal',     'prepartido: 674 partidos · nivel ×0,989 (sin ajuste) · descanso validado (465 partidos; Under real−app −0,2 pts)', '#LigaPortugal #Corners', '@LigaPortugal'],
-  ['E1',  'DB_E1',  'Championship',  'Championship',  'Championship (Inglaterra)',     [1.054, 1.054], [58, 100], 'ENGLAND: Championship',       'prepartido: 1.199 partidos · nivel ×1,054 · descanso validado (494 partidos; Under real−app −3,1 pts)', '#Championship #Corners', '@SkyBetChamp'],
-  ['D2',  'DB_D2',  '2. Bundesliga', '2. Bundesliga', '2. Bundesliga (Alemania)',      [1.051, 1.051], [60, 100], 'GERMANY: 2. Bundesliga',      'prepartido: 666 partidos · nivel ×1,051 · descanso validado (460 partidos; Under real−app −0,5 pts)', '#2Bundesliga #Corners', '@Bundesliga_EN'],
-  ['N1',  'DB_N1',  'Eredivisie',    'Eredivisie',    'Eredivisie (Países Bajos)',     [1.047, 1.047], [85, 100], 'NETHERLANDS: Eredivisie',     'prepartido: 675 partidos · nivel ×1,047 · descanso validado (443 partidos; Under real−app −3,5 pts)', '#Eredivisie #Corners', '@Eredivisie'],
-  ['B1',  'DB_B1',  'Bélgica',       'Bélgica',       'Pro League (Bélgica)',          [1.044, 1.044], [61, 100], 'BELGIUM: Jupiler Pro League', 'prepartido: 685 partidos · nivel ×1,044 · descanso validado (436 partidos; Under real−app +2,8 pts)', '#ProLeague #Corners', '@ProLeague'],
-  ['SC0', 'DB_SC0', 'Escocia',       'Escocia',       'Premiership (Escocia)',         [1.073, 1.073], [72, 100], 'SCOTLAND: Premiership',       'prepartido: 498 partidos · nivel ×1,073 · descanso validado (426 partidos; Under real−app +1,4 pts)', '#SPFL #Corners', '@spfl'],
+  ['F1',  'DB_F1',  'Ligue 1',       'Ligue 1',       'Ligue 1 (Francia)',             [1.008, 1.008], [41, 100], 'FRANCE: Ligue 1',             'prepartido: 657 partidos · nivel ×1,005 (sin ajuste) · descanso validado (464 partidos; Under real−app +1,4 pts)', '#Ligue1 #Corners', '@Ligue1'],
+  ['P1',  'DB_P1',  'Portugal',      'Portugal',      'Liga Portugal (Portugal)',      [1.009, 1.009], [70, 100], 'PORTUGAL: Liga Portugal',     'prepartido: 674 partidos · nivel ×0,989 (sin ajuste) · descanso validado (465 partidos; Under real−app −0,2 pts)', '#LigaPortugal #Corners', '@LigaPortugal'],
+  ['E1',  'DB_E1',  'Championship',  'Championship',  'Championship (Inglaterra)',     [1.057, 1.057], [58, 100], 'ENGLAND: Championship',       'prepartido: 1.199 partidos · nivel ×1,054 · descanso validado (494 partidos; Under real−app −3,1 pts)', '#Championship #Corners', '@SkyBetChamp'],
+  ['D2',  'DB_D2',  '2. Bundesliga', '2. Bundesliga', '2. Bundesliga (Alemania)',      [1.061, 1.061], [60, 100], 'GERMANY: 2. Bundesliga',      'prepartido: 666 partidos · nivel ×1,051 · descanso validado (460 partidos; Under real−app −0,5 pts)', '#2Bundesliga #Corners', '@Bundesliga_EN'],
+  ['N1',  'DB_N1',  'Eredivisie',    'Eredivisie',    'Eredivisie (Países Bajos)',     [1.048, 1.048], [85, 100], 'NETHERLANDS: Eredivisie',     'prepartido: 675 partidos · nivel ×1,047 · descanso validado (443 partidos; Under real−app −3,5 pts)', '#Eredivisie #Corners', '@Eredivisie'],
+  ['B1',  'DB_B1',  'Bélgica',       'Bélgica',       'Pro League (Bélgica)',          [1.050, 1.050], [61, 100], 'BELGIUM: Jupiler Pro League', 'prepartido: 685 partidos · nivel ×1,044 · descanso validado (436 partidos; Under real−app +2,8 pts)', '#ProLeague #Corners', '@ProLeague'],
+  ['SC0', 'DB_SC0', 'Escocia',       'Escocia',       'Premiership (Escocia)',         [1.077, 1.077], [72, 100], 'SCOTLAND: Premiership',       'prepartido: 498 partidos · nivel ×1,073 · descanso validado (426 partidos; Under real−app +1,4 pts)', '#SPFL #Corners', '@spfl'],
 ].forEach(([k, dbName, name, short, full, lf, rf, fs, check, tags, mention]) => {
   let db, lg, goals;
   try { db = eval(dbName); lg = eval('LG_' + dbName.slice(3)); goals = eval('GOALS_' + dbName.slice(3)); } catch (e) { return; }
   LEAGUES[k] = {name, short, full, db, lg, goals, refs: {}, lf, rf, fs, check, tags, mention, pre: true};
 });
+Object.keys(LEAGUES).forEach(k => { LEAGUES[k].refs = REFS_V51[k] || {}; });
 const ligaShort = l => LEAGUES[l] ? LEAGUES[l].short : l === 'man' ? 'Manual' : 'Otra';
 function renderExtraLeagueButtons() {
   const box = document.getElementById('lt-extra'); if (!box) return;
@@ -1122,27 +1095,11 @@ function renderExtraLeagueButtons() {
 // ex = grupo excluyente (sólo uno activo)
 // ─────────────────────────────────────────────────────────────────────────────
 const QUAL_FACTORS = [
-  {id:'q-ext-l', grp:'Alineación local',     lbl:'Extremo/s titular/es ausentes',      mult:0.96},
-  {id:'q-lat-l', grp:'Alineación local',     lbl:'Lateral ofensivo titular ausente',   mult:0.97},
-  {id:'q-dc-l',  grp:'Alineación local',     lbl:'Delantero centro titular ausente',   mult:0.98},
-  {id:'q-rot-l', grp:'Alineación local',     lbl:'Rotación masiva (>4 no habituales)', mult:0.95},
-  {id:'q-ext-v', grp:'Alineación visitante', lbl:'Extremo/s titular/es ausentes',      mult:0.96},
-  {id:'q-lat-v', grp:'Alineación visitante', lbl:'Lateral ofensivo titular ausente',   mult:0.97},
-  {id:'q-dc-v',  grp:'Alineación visitante', lbl:'Delantero centro titular ausente',   mult:0.98},
-  {id:'q-rot-v', grp:'Alineación visitante', lbl:'Rotación masiva (>4 no habituales)', mult:0.96},
-  {id:'q-p2',  grp:'Contexto clasificatorio', ex:'ctx', lbl:'Ambos necesitan puntos urgentemente', mult:1.05},
-  {id:'q-p1l', grp:'Contexto clasificatorio', ex:'ctx', lbl:'Sólo el local necesita ganar',        mult:1.04},
-  {id:'q-p1v', grp:'Contexto clasificatorio', ex:'ctx', lbl:'Sólo el visitante necesita ganar',    mult:1.03},
-  {id:'q-sin', grp:'Contexto clasificatorio', ex:'ctx', lbl:'Sin nada en juego para ninguno',      mult:0.96},
-  {id:'q-vue', grp:'Calendario', lbl:'Vuelta — un equipo cierra resultado global', mult:0.95},
-  {id:'q-par', grp:'Calendario', lbl:'Primer partido tras parón internacional',    mult:0.97},
-  {id:'q-f1l', grp:'Fatiga local',     ex:'fl', lbl:'Copa/Europa hace ≤3 días', mult:0.95},
-  {id:'q-f3l', grp:'Fatiga local',     ex:'fl', lbl:'3.er partido en 10 días',  mult:0.97},
-  {id:'q-f1v', grp:'Fatiga visitante', ex:'fv', lbl:'Copa/Europa hace ≤3 días', mult:0.96},
-  {id:'q-f3v', grp:'Fatiga visitante', ex:'fv', lbl:'3.er partido en 10 días',  mult:0.98},
-  {id:'q-lluv',grp:'Condiciones', lbl:'Lluvia intensa / campo mojado', mult:1.06},
-  {id:'q-vien',grp:'Condiciones', lbl:'Viento fuerte (>40 km/h)',      mult:1.04},
-  {id:'q-cal', grp:'Condiciones', lbl:'Calor extremo (>35 °C)',        mult:0.97},
+  // v51 · Medidos con 21.941 partidos de 12 ligas (2021-22 a 2026-27) frente a la previsión de la app. Peso completo (QUAL_WEIGHT = 1).
+  {id:'q-llu2',  grp:'Tiempo', lbl:'Lluvia intensa durante el partido (2 mm o más)', mult:1.03},   // ×1,033 [1,010–1,057], 858 partidos; dos fuentes
+  {id:'q-cal30', grp:'Tiempo', lbl:'Calor: 30 °C o más',                              mult:0.97},   // ×0,94 [0,89–0,99], 178 partidos → se aplica prudente
+  {id:'q-3c-l',  grp:'Dibujo habitual', lbl:'Local con tres centrales y tres arriba (3-4-3, 3-4-2-1)',     mult:0.98},   // ×0,982 [0,973–0,991] por equipo
+  {id:'q-3c-v',  grp:'Dibujo habitual', lbl:'Visitante con tres centrales y tres arriba (3-4-3, 3-4-2-1)', mult:0.98},
 ];
 const QUAL_BY_ID = Object.fromEntries(QUAL_FACTORS.map(f => [f.id, f]));
 let lastAIReasons = {};
@@ -1280,7 +1237,7 @@ function updateQualDisplay() {
   const mc = Math.min(QUAL_MAX, Math.max(QUAL_MIN, m));
   const eff = 1 + (mc - 1) * QUAL_WEIGHT;
   const badge = document.getElementById('qual-badge');
-  badge.textContent = `×${m.toFixed(3)} · efectivo ×${eff.toFixed(3)}`;
+  badge.textContent = `×${eff.toFixed(3)}`;
   badge.style.color = eff>1?'var(--win)':eff<1?'var(--loss)':'var(--ac)';
 }
 
@@ -1320,6 +1277,7 @@ function setLiga(btn) {
   document.getElementById('man-mode').style.display = currentLiga === 'man' ? '' : 'none';
   if (currentLiga !== 'man') populateTeams();
   populateRefs();
+  if (typeof autoDibujo === 'function') autoDibujo();   // v51: al cambiar de liga, el dibujo se recalcula
 }
 
 function populateTeams() {
@@ -1346,11 +1304,11 @@ function populateRefs(targetSelId='sel-ref') {
   const sel = document.getElementById(targetSelId);
   const prev = sel.value;
   sel.innerHTML = '<option value="">— Sin ajuste —</option>';
-  Object.entries(refDB).sort((a,b) => b[1]-a[1]).forEach(([name, mult]) => {
+  Object.entries(refDB).sort((a,b) => a[0].localeCompare(b[0], 'es')).forEach(([name, mult]) => {
     const o = document.createElement('option');
     o.value = name;
-    const pct = ((mult-1)*100).toFixed(0);
-    o.textContent = `${name}  (${mult >= 1 ? '+' : ''}${pct}%)`;
+    const pct = ((mult-1)*100).toFixed(1).replace('.', ',');
+    o.textContent = `${name}  (${mult >= 1 ? '+' : ''}${pct} %)`;
     if (name === prev) o.selected = true;
     sel.appendChild(o);
   });
@@ -1363,11 +1321,11 @@ function populateModalRefs() {
   const sel = document.getElementById('mf-arb');
   const prev = sel.value;
   sel.innerHTML = '<option value="">— Sin especificar —</option>';
-  Object.entries(refDB).sort((a,b) => b[1]-a[1]).forEach(([name, mult]) => {
+  Object.entries(refDB).sort((a,b) => a[0].localeCompare(b[0], 'es')).forEach(([name, mult]) => {
     const o = document.createElement('option');
     o.value = name;
-    const pct = ((mult-1)*100).toFixed(0);
-    o.textContent = `${name}  (${mult >= 1 ? '+' : ''}${pct}%)`;
+    const pct = ((mult-1)*100).toFixed(1).replace('.', ',');
+    o.textContent = `${name}  (${mult >= 1 ? '+' : ''}${pct} %)`;
     if (name === prev) o.selected = true;
     sel.appendChild(o);
   });
@@ -1390,10 +1348,10 @@ const ADD1 = 4.08, ADD2 = 6.58; // añadido medio observado (min)
 const RED_GOAL_OWN = 0.70, RED_GOAL_OPP = 1.35;  // efecto roja sobre goles (literatura, fijo)
 const LATE_MIN = 70;
 const N_PMF_MAX = 60;
-const REF_WEIGHT = 0;
+const REF_WEIGHT = 1;     // v51: la tabla ya viene atenuada
 const QUAL_MIN = 0.90, QUAL_MAX = 1.10;
 // Peso del ajuste cualitativo en λ (0 = sólo se registra). Subir sólo si la validación en Analítica lo respalda.
-const QUAL_WEIGHT = 0;
+const QUAL_WEIGHT = 1;    // v51: sólo quedan factores medidos
 // v40 · MÉTODO TENIS: la probabilidad es 100% modelo; Bet365 sólo se usa para comparar.
 // Hay valor si  cuota justa del modelo × colchón ≤ cuota Bet365  ⇔  p·cuota ≥ colchón  ⇔  EV bruto ≥ overround,
 // con colchón = 1/cuotaOver + 1/cuotaUnder (overround real de ese mercado). El edge y el Kelly ¼ van sobre la cuota bruta.
@@ -1675,7 +1633,9 @@ function computeModel(inp) {
   const str = G ? G.pH - G.pA : 0;
   const refEff = 1 + (refMult - 1) * REF_WEIGHT;
   const qEff = 1 + (Math.min(QUAL_MAX, Math.max(QUAL_MIN, qualMult)) - 1) * QUAL_WEIGHT;
-  const ctx = {baseL: B.baseL * refEff * qEff, baseV: B.baseV * refEff * qEff, rL, rV, str, mh, ma, lf: inp.leagueF || null, sx: inp.leagueSX || null};
+  // v51: árbitro y ajustes multiplican el ritmo de córners directamente (antes iban sobre la base, que entra elevada a β)
+  const adj = refEff * qEff, lf0 = inp.leagueF || [1, 1];
+  const ctx = {baseL: B.baseL, baseV: B.baseV, rL, rV, str, mh, ma, lf: adj === 1 ? (inp.leagueF || null) : [lf0[0] * adj, lf0[1] * adj], sx: inp.leagueSX || null};
 
   const {elapsed, remaining} = splitUnits(minuto);
   // esperado transcurrido (desde 0-0, 11 v 11; el camino real del marcador no se conoce)
@@ -1783,7 +1743,7 @@ const TAB_FIELDS = ['sel-loc','sel-vis','o-1','o-x','o-2','minuto','g-loc','g-vi
   'sel-ref','linea','odd-o','odd-u','m-lhf','m-vaf','m-lhc','m-vac'];
 let tabsState = {active: null, tabs: []};
 let tabsReady = false;
-function newTabObj() { return {id: 't' + Date.now() + Math.floor(Math.random()*1000), liga: 'll', f: {minuto: '45', 'g-loc':'0','g-vis':'0','c-loc':'0','c-vis':'0','r-loc':'0','r-vis':'0', linea:'9.5'}, qual: [], analyzed: false, side: null}; }
+function newTabObj() { return {id: 't' + Date.now() + Math.floor(Math.random()*1000), liga: 'll', f: {minuto: '0', 'g-loc':'0','g-vis':'0','c-loc':'0','c-vis':'0','r-loc':'0','r-vis':'0', linea:'9.5'}, qual: [], analyzed: false, side: null}; }
 function tabSnap(t) { return JSON.stringify([t.liga, t.f, [...(t.qual || [])].sort()]); }
 function saveTabs() { try { localStorage.setItem(TABS_KEY, JSON.stringify(tabsState)); } catch(e) {} }
 function curTab() { return tabsState.tabs.find(t => t.id === tabsState.active); }
@@ -1797,18 +1757,21 @@ function collectTab() {
   const t = curTab(); if (!t || !tabsReady) return;
   t.liga = currentLiga;
   TAB_FIELDS.forEach(id => { const el = document.getElementById(id); if (el) t.f[id] = el.value; });
-  t.qual = activeQualIds();
+  t.qual = activeQualIds(); t.qualSet = true;
   saveTabs();
 }
 function applyTab(t) {
   const btn = document.querySelector(`.lt[data-liga="${t.liga}"]`) || document.querySelector('.lt[data-liga="ll"]');
   setLiga(btn);
   // equipos primero (dependen de la liga), luego el resto
+  ['minuto','g-loc','g-vis','c-loc','c-vis','r-loc','r-vis'].forEach(k => { t.f[k] = '0'; });   // v51: sólo prepartido
+  delete t.live; delete t.oddsAt;
   TAB_FIELDS.forEach(id => { const el = document.getElementById(id); if (!el) return;
     el.value = t.f[id] !== undefined ? t.f[id] : (el.tagName === 'SELECT' ? '' : el.defaultValue); });
   onTeamChange();
   clearQual();
-  (t.qual || []).forEach(id => { const el = document.getElementById(id); if (el) el.checked = true; });
+  if (t.qualSet) (t.qual || []).forEach(id => { const el = document.getElementById(id); if (el) el.checked = true; });
+  else autoDibujo();                                   // pestaña nueva o guardada por una versión anterior: dibujo automático
   updateQualDisplay();
   clearErr();
   document.getElementById('empty').hidden = false;
@@ -2082,8 +2045,8 @@ function tabModelInputs(t) {
   const refDB2 = L.refs, rn = f['sel-ref'];
   const qualMult = (t.qual || []).reduce((m, id) => m * (QUAL_BY_ID[id] ? QUAL_BY_ID[id].mult : 1), 1);
   return {inp: {hf: ld[0], haf: ld[1], vf: vd[2], vaf: vd[3], lg: L.lg, goalsLg: L.goals, odds1x2: has1x2 ? o1 : null,
-    minuto: Math.max(0, Math.min(105, parseInt(f.minuto) || 0)), gL: i('g-loc'), gV: i('g-vis'), cL, cV,
-    rL: Math.min(3, i('r-loc')), rV: Math.min(3, i('r-vis')), linea: oddsOk ? linea : NaN, oddO: oddsOk ? oO : NaN, oddU: oddsOk ? oU : NaN,
+    minuto: 0, gL: 0, gV: 0, cL: 0, cV: 0,
+    rL: 0, rV: 0, linea: oddsOk ? linea : NaN, oddO: oddsOk ? oO : NaN, oddU: oddsOk ? oU : NaN,
     refMult: rn && refDB2[rn] ? refDB2[rn] : 1, qualMult, leagueF: L.lf, leagueSX: L.sx || null, rFrail: L.rf || null, liga}, has1x2, stale};
 }
 function evaluateTab(t) {
@@ -2172,6 +2135,7 @@ function initLive() {
 function initTabs() {
   try { const s = JSON.parse(localStorage.getItem(TABS_KEY)); if (s && Array.isArray(s.tabs) && s.tabs.length) tabsState = s; } catch(e) {}
   if (!tabsState.tabs.length) { const t = newTabObj(); tabsState = {active: t.id, tabs: [t]}; }
+  tabsState.tabs.forEach(t => { delete t.live; delete t.oddsAt; if (!t.qualSet) t.qual = []; else t.qual = (t.qual || []).filter(id => QUAL_BY_ID[id]); });   // v51: sin vivo; factores antiguos fuera
   if (!curTab()) tabsState.active = tabsState.tabs[0].id;
   applyTab(curTab()); tabsReady = true; renderTabBar();
   const panel = document.getElementById('tab-analisis');
@@ -2182,7 +2146,31 @@ function initTabs() {
 function leagueCtx() {
   return LEAGUES[currentLiga] || LEAGUES.ll;
 }
+// v51 · Tres centrales con tres arriba: 3-4-3, 3-4-2-1 y similares (no 3-5-2 ni variantes de dos puntas). Habitual = 2 de sus 3 últimos partidos.
+const F3_NO = ['3-5-2', '3-1-4-2', '3-3-2-2', '3-4-1-2', '3-5-1-1'];
+const isF3 = f => typeof f === 'string' && f[0] === '3' && !F3_NO.includes(f);
+function teamForms(liga, team) { const d = (typeof FORM_DB !== 'undefined' && FORM_DB[liga]) || {}; return d[team] || []; }
+function habitualF3(liga, team) { const L = teamForms(liga, team).slice(-3); return L.length >= 2 && L.filter(isF3).length >= 2; }
+function autoDibujo() {
+  const loc = document.getElementById('sel-loc').value, vis = document.getElementById('sel-vis').value;
+  const a = document.getElementById('q-3c-l'), b = document.getElementById('q-3c-v'); if (!a || !b) return;
+  a.checked = !!loc && habitualF3(currentLiga, loc); b.checked = !!vis && habitualF3(currentLiga, vis);
+  updateQualDisplay();
+}
+function renderFormHint() {
+  const el = document.getElementById('form-hint'); if (!el) return;
+  const loc = document.getElementById('sel-loc').value, vis = document.getElementById('sel-vis').value;
+  if (currentLiga === 'man' || !loc || !vis) { el.hidden = true; return; }
+  const txt = t => { const L = teamForms(currentLiga, t); return L.length ? `${t}: ${L.join(' · ')}${habitualF3(currentLiga, t) ? ' → tres centrales ✔' : ''}` : `${t}: sin datos de dibujo`; };
+  const dias = FORM_DATE ? Math.floor((Date.now() - new Date(FORM_DATE + 'T12:00:00').getTime()) / 864e5) : null;
+  const viejo = dias === null || dias > 9;       // la base se renueva martes y viernes: más de 9 días = algo ha fallado
+  el.textContent = `Dibujo en sus últimos partidos${FORM_DATE ? ' (a ' + FORM_DATE + ')' : ''} — ${txt(loc)}  |  ${txt(vis)}` +
+    (viejo ? `  ·  ⚠ dibujos sin renovar${dias !== null ? ' desde hace ' + dias + ' días' : ''}: comprueba a mano la casilla de tres centrales` : '');
+  el.style.borderLeftColor = viejo ? 'var(--wn)' : '';
+  el.hidden = false;
+}
 function onTeamChange() {
+  renderFormHint();
   const {db, lg} = leagueCtx();
   const loc = document.getElementById('sel-loc').value, vis = document.getElementById('sel-vis').value;
   const hint = document.getElementById('team-hint');
@@ -2232,9 +2220,9 @@ function analyze(mode) {
     hf = ld[0]; haf = ld[1]; vf = vd[2]; vaf = vd[3];
   }
   const int = id => parseInt(document.getElementById(id).value) || 0;
-  const gL = int('g-loc'), gV = int('g-vis'), cL = int('c-loc'), cV = int('c-vis'), rL = Math.min(3, int('r-loc')), rV = Math.min(3, int('r-vis'));
+  const gL = 0, gV = 0, cL = 0, cV = 0, rL = 0, rV = 0;   // v51: sólo prepartido
   const minRaw = document.getElementById('minuto').value;
-  const minuto = minRaw === '' ? 45 : Math.max(0, Math.min(105, parseInt(minRaw) || 0));
+  const minuto = 0;   // v51: sólo prepartido
   const linea = parseFloat(document.getElementById('linea').value);
   const oddO = parseFloat(document.getElementById('odd-o').value), oddU = parseFloat(document.getElementById('odd-u').value);
   const lineaOk = isFinite(linea);
@@ -2351,11 +2339,11 @@ function analyze(mode) {
       : `${M.ht} vistos / ${M.Eel.toFixed(2)} esperados → nivel ×${M.paceMult.toFixed(3)} (gamma r=${M.RF})`;
     paceEl.style.color = Math.abs(M.paceMult-1) > 0.02 ? 'var(--wn)' : '';
     const refEl = document.getElementById('d-ref');
-    refEl.textContent = refName ? `${refName} ×${refMult.toFixed(2)} · peso ${REF_WEIGHT} → ×${M.refEff.toFixed(3)}` : 'No especificado';
+    refEl.textContent = refName ? `${refName} ×${M.refEff.toFixed(3)}` : 'Sin ajuste';
     const activeQual = activeQualIds().map(id => QUAL_BY_ID[id]);
     const qualEl = document.getElementById('d-qual');
     qualEl.textContent = activeQual.length
-      ? `×${qualMult.toFixed(3)} · peso ${QUAL_WEIGHT} → ×${M.qEff.toFixed(3)}  ·  ${activeQual.map(f=>f.lbl.split('(')[0].trim()).join(', ')}` : 'Sin factores';
+      ? `×${M.qEff.toFixed(3)}  ·  ${activeQual.map(f=>f.lbl.split('(')[0].trim()).join(', ')}` : 'Ninguno';
     qualEl.style.color = M.qEff!==1 ? 'var(--wn)' : '';
     document.getElementById('d-mkt').textContent = !M.hasOdds ? (stale ? 'Cuotas caducadas' : 'Sin cuotas') : M.lamMkt===null ? 'Mercado ya decidido' : `λ ${M.lamMkt.toFixed(3)} · margen Bet365 ${M.margin.toFixed(2)}%`;
     document.getElementById('d-blend').textContent = M.lamMkt===null ? `100% modelo = ${M.lam.toFixed(2)}`
@@ -2702,11 +2690,12 @@ function qualValidation() {
   return head + used.map(id => {
     const f = QUAL_BY_ID[id]; const w = rows.filter(r => r.ids.includes(id)), wo = rows.filter(r => !r.ids.includes(id));
     const rw = ratio(w), rwo = ratio(wo), rel = rw / rwo, s = Math.sqrt((se(w)/rw)**2 + (se(wo)/rwo)**2) * rel;
+    const sup = f ? 1 + (f.mult - 1) * (1 - QUAL_WEIGHT) : 1;   // v51: el factor ya va dentro de la previsión → lo esperado es ×1
     const verdict = w.length < 30 ? `<span style="color:var(--tm)">muestra insuficiente (&lt;30)</span>`
       : Math.abs(rel - (f?f.mult:1)) <= 2*s && Math.abs(rel - 1) > 2*s ? '<span class="pos">consistente con el factor</span>'
       : Math.abs(rel - 1) <= 2*s ? '<span style="color:var(--wn)">indistinguible de ×1</span>' : '<span class="neg">contradice el factor</span>';
     return `<div class="bkd-row"><div class="bkd-name">${f?f.grp+' · '+f.lbl:id}</div>
-      <div class="bkd-stats">n=${w.length} · observado ×${isFinite(rel)?rel.toFixed(3):'—'} ± ${isFinite(s)?s.toFixed(3):'—'} · supuesto ×${f?f.mult.toFixed(2):'—'} · ${verdict}</div></div>`;
+      <div class="bkd-stats">n=${w.length} · observado ×${isFinite(rel)?rel.toFixed(3):'—'} ± ${isFinite(s)?s.toFixed(3):'—'} · esperado ×${sup.toFixed(2)}${f && QUAL_WEIGHT === 1 ? ' (ajuste ×' + f.mult.toFixed(2) + ' ya incluido)' : ''} · ${verdict}</div></div>`;
   }).join('');
 }
 
@@ -2895,7 +2884,7 @@ function toast(msg,err=false) {
   document.getElementById('qual-weight-lbl').textContent = QUAL_WEIGHT;
   updateQualDisplay();
   initTabs();
-  initLive();
+  // v51: sin seguimiento en vivo (initLive no se llama)
   const lt = document.getElementById('leagues-table');
   if (lt) lt.innerHTML = Object.values(LEAGUES).map(L => `<tr><td>${L.name}${L.warn ? ' ⚠' : ''}</td><td>${escHTML(L.check)}</td></tr>`).join('');
 
