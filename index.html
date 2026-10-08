@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#0b0f1a">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<!-- v52: JORNADA — la base trae los próximos partidos de cada liga con el 1X2 de Bet365 (Flashscore) y la previsión de lluvia y temperatura; en la app sólo se teclean la línea y las cuotas de córners · «Abrir» pasa el partido al formulario para árbitro, correcciones y registrar -->
 <!-- v51: SÓLO PREPARTIDO · ajustes medidos con 21.941 partidos de 12 ligas (árbitro atenuado, lluvia intensa, calor ≥30 °C, tres centrales con tres arriba) a peso completo · fuera el prompt de IA, el vivo/descanso y los factores sin efecto (alineaciones, rotación, parón, fatiga, viento, campo mojado, contexto) · dibujo reciente de cada equipo en la base -->
 <!-- v38: + Premier, Serie A y Bundesliga (validadas minuto a minuto con Flashscore; factor de nivel por liga) -->
 <!-- v37: EN VIVO — minuto/marcador/córners/rojas/1X2 desde Flashscore cada 30 s · alertas con sonido y vibración (valor y situaciones) · cuota mínima para entrar · cuotas caducadas tras córner · funciona sin cuotas -->
@@ -102,6 +103,13 @@ body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:15px
 .ch{padding:10px 14px 9px;border-bottom:1px solid var(--bds);font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--tm);display:flex;align-items:center;gap:6px;}
 .ch .dot{width:5px;height:5px;border-radius:50%;background:var(--ac);flex-shrink:0;}
 .cb{padding:14px;}
+.jor-row{padding:11px 0;border-bottom:1px solid var(--bd);} .jor-row:last-child{border-bottom:0;padding-bottom:2px;}
+.jor-top{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:13.5px;color:var(--tx);}
+.jor-when{font-size:11px;color:var(--tm);font-family:var(--mono);white-space:nowrap;}
+.jor-meta{font-size:11px;color:var(--ts);margin:3px 0 7px;line-height:1.5;}
+.jor-in{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;}
+.jor-in input{padding:8px 4px;font-size:14px;min-width:0;width:100%;}
+.jor-res{font-size:12.5px;margin-top:7px;font-weight:600;font-family:var(--mono);line-height:1.45;}
 .ltabs{display:flex;flex-wrap:wrap;gap:2px;overflow-x:auto;scrollbar-width:none;background:var(--rsd);border:1px solid var(--bd);border-radius:8px;padding:3px;margin-bottom:12px;}
 .lt{flex:1 0 auto;white-space:nowrap;padding:7px 8px;font-size:11px;font-weight:700;letter-spacing:.04em;text-align:center;color:var(--tm);border-radius:6px;cursor:pointer;border:none;background:transparent;transition:background .12s,color .12s;font-family:var(--sans);}
 .lt.on{background:var(--ac);color:#001a14;}
@@ -238,7 +246,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
 <body>
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
 <header class="hdr">
-  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v51</span></div>
+  <div class="logo">Corner<em>Edge</em> <span style="font-size:11px;color:var(--tm);font-family:var(--mono);font-weight:400">v52</span></div>
   <div class="hdr-right">
     <div class="banca-row">
       <label for="banca">Banca</label>
@@ -271,6 +279,14 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
       <button class="lt" data-liga="D1" onclick="setLiga(this)">Bundesliga</button>
       <span id="lt-extra" style="display:contents"></span>
       <button class="lt" data-liga="man" onclick="setLiga(this)">Manual</button>
+    </div>
+
+    <div class="card" id="jor-card" style="display:none">
+      <div class="ch"><span class="dot"></span><span id="jor-title">Próximos partidos</span></div>
+      <div class="cb" style="padding:4px 14px 12px">
+        <div id="jor-list"></div>
+        <div class="note" id="jor-note"></div>
+      </div>
     </div>
 
     <div class="card" id="card-equipos">
@@ -926,7 +942,7 @@ const DB_SC0 = {
   "St Mirren": [5.516, 5.632, 4.795, 6.889, 4, 3, 1]
 };
 const LG_LL = {"hf": 5.385, "vf": 4.276}, GOALS_LL = [1.595, 1.154];
-const LG_S2 = {"hf": 5.052, "vf": 4.158}, GOALS_S2 = [1.453, 1.175];
+const LG_S2 = {"hf": 5.052, "vf": 4.158}, GOALS_S2 = [1.453, 1.176];
 const LG_E0 = {"hf": 5.281, "vf": 4.562}, GOALS_E0 = [1.526, 1.233];
 const LG_I1 = {"hf": 5.007, "vf": 3.983}, GOALS_I1 = [1.3, 1.181];
 const LG_D1 = {"hf": 5.613, "vf": 4.356}, GOALS_D1 = [1.842, 1.453];
@@ -953,7 +969,23 @@ const FORM_DB = {
   "B1": {"Anderlecht": ["4-4-2", "4-4-2", "4-4-2"], "Antwerp": ["4-4-2", "4-4-2", "4-2-3-1"], "Beveren": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Cercle Brugge": ["3-4-2-1", "3-4-2-1", "5-3-2"], "Charleroi": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Club Brugge": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Genk": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Gent": ["3-4-2-1", "3-4-2-1", "3-4-2-1"], "Kortrijk": ["3-4-2-1", "3-1-4-2", "4-4-2"], "Lommel SK": ["4-1-4-1", "4-1-4-1", "4-1-4-1"], "Mechelen": ["3-4-2-1", "3-4-1-2", "3-4-2-1"], "Oud-Heverlee Leuven": ["3-1-4-2", "3-4-3", "3-5-2"], "RAAL La Louviere": ["3-4-3", "3-4-3", "3-5-1-1"], "St Truiden": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "St. Gilloise": ["3-4-1-2", "3-4-1-2", "3-1-4-2"], "Standard": ["4-3-3", "4-3-3", "4-3-3"], "Waregem": ["4-3-3", "4-3-2-1", "4-3-3"], "Westerlo": ["4-2-3-1", "4-2-3-1", "4-2-3-1"]},
   "SC0": {"Aberdeen": ["4-1-3-2", "5-3-2", "3-5-2"], "Celtic": ["4-2-3-1", "4-2-3-1", "3-4-2-1"], "Dundee": ["4-4-2", "4-4-2", "4-4-2"], "Dundee United": ["4-3-3", "4-3-3", "4-3-3"], "Falkirk": ["4-2-3-1", "4-2-3-1", "4-2-3-1"], "Hearts": ["4-2-3-1", "4-2-3-1", "4-4-2"], "Hibernian": ["4-1-4-1", "3-1-4-2", "3-4-1-2"], "Kilmarnock": ["4-1-3-2", "4-2-3-1", "4-2-3-1"], "Motherwell": ["4-2-3-1", "4-2-2-2", "4-2-3-1"], "Rangers": ["4-2-3-1", "4-2-3-1", "4-4-1-1"], "St Johnstone": ["4-3-3", "4-2-3-1", "4-2-3-1"], "St Mirren": ["4-2-3-1", "5-4-1", "4-2-3-1"]}
 };
-const FORM_DATE = '2026-10-06';
+const FORM_DATE = '2026-10-08';
+// Próximos partidos (Flashscore): t = inicio (UTC, segundos), o = 1X2 de Bet365, mm = lluvia prevista en las 3 h del partido, tc = °C.
+const JORNADA = {
+  "ll": [{"t":1791572400,"h":"Malaga","a":"Espanol","o":[2.8,3.1,2.7],"mm":0.0,"tc":21.0},{"t":1791633600,"h":"Vallecano","a":"Ath Bilbao","o":[2.7,3.4,2.6],"mm":0.0,"tc":20.7},{"t":1791641700,"h":"Alaves","a":"Ath Madrid","o":[4.5,3.9,1.73],"mm":0.0,"tc":19.2},{"t":1791649800,"h":"Barcelona","a":"Getafe","o":[1.09,12.0,21.0],"mm":0.0,"tc":22.4},{"t":1791658800,"h":"Real Madrid","a":"Villarreal","o":[1.36,5.75,8.0],"mm":0.0,"tc":18.5},{"t":1791720000,"h":"Elche","a":"Celta","o":[2.8,3.2,2.63],"mm":0.0,"tc":23.8},{"t":1791728100,"h":"Sociedad","a":"La Coruna","o":[1.62,3.9,5.5],"mm":0.0,"tc":19.1},{"t":1791736200,"h":"Betis","a":"Osasuna","o":[1.55,4.0,6.25],"mm":0.0,"tc":27.8},{"t":1791745200,"h":"Santander","a":"Valencia","o":[2.3,3.6,3.0],"mm":0.0,"tc":16.6},{"t":1791831600,"h":"Levante","a":"Sevilla","o":[2.7,3.25,2.7],"mm":0.0,"tc":22.1},{"t":1792177200,"h":"La Coruna","a":"Levante","o":[2.1,3.4,3.4],"mm":0.0,"tc":16.4}],
+  "s2": [{"t":1791641700,"h":"Ceuta","a":"Sabadell","o":[3.6,3.2,2.05],"mm":0.0,"tc":22.9},{"t":1791649800,"h":"Eldense","a":"Cordoba","o":[2.01,3.8,3.2],"mm":0.0,"tc":19.7},{"t":1791658800,"h":"Celta B","a":"Sociedad B","o":[2.25,3.4,3.0],"mm":0.0,"tc":17.2},{"t":1791720000,"h":"Andorra","a":"Castellon","o":[3.2,3.4,2.15],"mm":0.0,"tc":18.3},{"t":1791728100,"h":"Almeria","a":"Leganes","o":[1.62,3.7,5.25],"mm":0.0,"tc":23.9},{"t":1791736200,"h":"Mallorca","a":"Las Palmas","o":[1.53,3.8,6.0],"mm":0.0,"tc":23.8},{"t":1791745200,"h":"Cadiz","a":"Sp Gijon","o":[2.5,3.1,2.82],"mm":0.0,"tc":22.0},{"t":1791806400,"h":"Valladolid","a":"Albacete","o":[1.91,3.3,4.0],"mm":0.0,"tc":22.0},{"t":1791814500,"h":"Burgos","a":"Granada","o":[2.5,3.1,2.82],"mm":0.0,"tc":20.8},{"t":1791822600,"h":"Oviedo","a":"Eibar","o":[2.1,3.2,3.5],"mm":0.0,"tc":18.6},{"t":1791831600,"h":"Tenerife","a":"Girona","o":[2.75,3.1,2.55],"mm":0.0,"tc":23.2},{"t":1792175400,"h":"Leganes","a":"Cordoba","o":null,"mm":0.0,"tc":19.5}],
+  "E0": [{"t":1791631800,"h":"Arsenal","a":"Leeds","o":[1.36,5.25,7.5],"mm":0.0,"tc":13.8},{"t":1791640800,"h":"Aston Villa","a":"Brentford","o":[2.63,3.5,2.6],"mm":0.0,"tc":11.9},{"t":1791640800,"h":"Chelsea","a":"Bournemouth","o":[1.65,4.2,4.75],"mm":0.0,"tc":14.2},{"t":1791640800,"h":"Ipswich","a":"Fulham","o":[2.88,3.4,2.45],"mm":0.0,"tc":13.4},{"t":1791640800,"h":"Sunderland","a":"Brighton","o":[3.1,3.4,2.3],"mm":0.0,"tc":11.4},{"t":1791649800,"h":"Man United","a":"Tottenham","o":[1.7,4.0,4.75],"mm":0.9,"tc":10.5},{"t":1791723600,"h":"Crystal Palace","a":"Nott'm Forest","o":[2.7,3.1,2.75],"mm":0.0,"tc":14.0},{"t":1791723600,"h":"Hull","a":"Everton","o":[3.7,3.4,2.05],"mm":0.0,"tc":12.8},{"t":1791732600,"h":"Liverpool","a":"Man City","o":[2.6,3.6,2.6],"mm":0.0,"tc":11.9},{"t":1791831600,"h":"Coventry","a":"Newcastle","o":[3.3,3.7,2.1],"mm":0.6,"tc":12.9}],
+  "I1": [{"t":1791637200,"h":"Genoa","a":"Fiorentina","o":[3.3,3.25,2.25],"mm":0.0,"tc":21.2},{"t":1791648000,"h":"Inter","a":"Parma","o":[1.14,8.5,17.0],"mm":0.0,"tc":19.0},{"t":1791657900,"h":"Napoli","a":"Frosinone","o":[1.44,4.75,7.0],"mm":1.3,"tc":18.4},{"t":1791714600,"h":"Como","a":"Roma","o":[2.6,3.5,2.63],"mm":0.0,"tc":20.5},{"t":1791723600,"h":"Lazio","a":"Monza","o":[1.57,4.0,6.0],"mm":0.0,"tc":24.2},{"t":1791723600,"h":"Lecce","a":"Bologna","o":[4.33,3.4,1.91],"mm":0.3,"tc":21.6},{"t":1791734400,"h":"Sassuolo","a":"Milan","o":[4.5,3.7,1.8],"mm":0.0,"tc":20.9},{"t":1791744300,"h":"Cagliari","a":"Juventus","o":[7.0,3.75,1.55],"mm":0.0,"tc":20.1},{"t":1791822600,"h":"Atalanta","a":"Venezia","o":[1.57,4.2,5.75],"mm":0.0,"tc":17.9},{"t":1791830700,"h":"Torino","a":"Udinese","o":[2.3,3.2,3.3],"mm":0.0,"tc":16.4},{"t":1792176300,"h":"Frosinone","a":"Sassuolo","o":[2.45,3.5,2.7],"mm":0.0,"tc":14.2}],
+  "D1": [{"t":1791570600,"h":"Dortmund","a":"Werder Bremen","o":[1.33,5.5,8.0],"mm":0.2,"tc":13.4},{"t":1791639000,"h":"Augsburg","a":"Bayern Munich","o":[11.0,8.5,1.18],"mm":0.0,"tc":13.1},{"t":1791639000,"h":"Hoffenheim","a":"Hamburg","o":[1.42,5.0,7.0],"mm":0.1,"tc":15.3},{"t":1791639000,"h":"Mainz","a":"Leverkusen","o":[3.0,3.8,2.2],"mm":0.0,"tc":17.0},{"t":1791639000,"h":"Paderborn","a":"Stuttgart","o":[5.0,4.75,1.57],"mm":0.5,"tc":13.4},{"t":1791639000,"h":"Union Berlin","a":"Elversberg","o":[2.3,3.7,2.9],"mm":0.0,"tc":15.7},{"t":1791649800,"h":"RB Leipzig","a":"Ein Frankfurt","o":[1.57,4.75,5.0],"mm":0.0,"tc":14.0},{"t":1791725400,"h":"FC Koln","a":"M'gladbach","o":[2.0,3.9,3.3],"mm":0.0,"tc":14.0},{"t":1791732600,"h":"Freiburg","a":"Schalke 04","o":[1.62,4.1,5.5],"mm":0.0,"tc":12.6},{"t":1792175400,"h":"Ein Frankfurt","a":"FC Koln","o":[1.9,4.0,3.4],"mm":0.0,"tc":9.3}],
+  "F1": [{"t":1791571500,"h":"Lens","a":"Lyon","o":[2.5,3.6,2.7],"mm":1.6,"tc":15.3},{"t":1791645300,"h":"Lille","a":"Le Havre","o":[1.44,4.5,7.5],"mm":0.0,"tc":14.1},{"t":1791657900,"h":"Brest","a":"Angers","o":[2.0,3.6,3.7],"mm":0.0,"tc":11.4},{"t":1791657900,"h":"Lorient","a":"Paris FC","o":[3.25,3.4,2.2],"mm":0.0,"tc":12.8},{"t":1791657900,"h":"Monaco","a":"Toulouse","o":[1.6,4.1,5.5],"mm":0.0,"tc":18.7},{"t":1791657900,"h":"Paris SG","a":"Le Mans","o":[1.08,13.0,21.0],"mm":0.0,"tc":13.5},{"t":1791723600,"h":"Nice","a":"Strasbourg","o":[2.35,3.6,3.0],"mm":0.0,"tc":21.5},{"t":1791731700,"h":"Rennes","a":"Auxerre","o":[1.44,4.75,7.0],"mm":0.0,"tc":16.2},{"t":1791744300,"h":"Troyes","a":"Marseille","o":[4.0,3.8,1.85],"mm":0.0,"tc":12.0},{"t":1792176300,"h":"Le Mans","a":"Toulouse","o":[3.0,3.4,2.2],"mm":0.1,"tc":9.4}],
+  "P1": [{"t":1791567900,"h":"Moreirense","a":"Gil Vicente","o":[3.3,3.2,2.2],"mm":0.0,"tc":19.4},{"t":1791573300,"h":"Sp Braga","a":"Sp Lisbon","o":[3.5,3.3,2.01],"mm":0.0,"tc":16.9},{"t":1791642600,"h":"Casa Pia","a":"Santa Clara","o":[4.5,3.25,1.81],"mm":0.0,"tc":24.3},{"t":1791651600,"h":"Maritimo","a":"Porto","o":[9.0,5.25,1.27],"mm":0.2,"tc":19.2},{"t":1791660600,"h":"Academico Viseu","a":"Estoril","o":[2.25,3.4,3.0],"mm":0.0,"tc":19.0},{"t":1791729000,"h":"Rio Ave","a":"Nacional","o":[2.2,3.2,3.2],"mm":0.0,"tc":19.5},{"t":1791738000,"h":"Benfica","a":"Guimaraes","o":[1.19,6.0,12.0],"mm":0.0,"tc":21.9},{"t":1791747000,"h":"Arouca","a":"Estrela","o":[2.05,3.3,3.5],"mm":0.0,"tc":17.1},{"t":1791832500,"h":"Famalicao","a":"Alverca","o":[1.76,3.4,4.5],"mm":0.0,"tc":16.9}],
+  "E1": [{"t":1791572400,"h":"West Ham","a":"QPR","o":[1.49,4.2,6.0],"mm":0.0,"tc":14.0},{"t":1791631800,"h":"Charlton","a":"Bristol City","o":[3.2,3.2,2.2],"mm":0.0,"tc":13.8},{"t":1791631800,"h":"Swansea","a":"Norwich","o":[2.32,3.5,2.75],"mm":0.0,"tc":13.1},{"t":1791631800,"h":"West Brom","a":"Birmingham","o":[2.32,3.4,3.0],"mm":0.0,"tc":11.5},{"t":1791640800,"h":"Blackburn","a":"Cardiff","o":[2.57,3.5,2.45],"mm":1.5,"tc":9.9},{"t":1791640800,"h":"Bolton","a":"Stoke","o":[2.65,3.4,2.45],"mm":1.2,"tc":9.8},{"t":1791640800,"h":"Derby","a":"Wrexham","o":[2.7,3.2,2.57],"mm":0.3,"tc":11.2},{"t":1791640800,"h":"Middlesbrough","a":"Wolves","o":[2.25,3.5,2.82],"mm":0.4,"tc":11.5},{"t":1791640800,"h":"Preston","a":"Millwall","o":[2.82,3.3,2.35],"mm":1.4,"tc":10.8},{"t":1791640800,"h":"Sheffield United","a":"Lincoln","o":[2.05,3.4,3.4],"mm":0.3,"tc":11.4},{"t":1791640800,"h":"Watford","a":"Burnley","o":[3.1,3.4,2.2],"mm":0.0,"tc":13.1},{"t":1791716400,"h":"Southampton","a":"Portsmouth","o":[1.53,4.0,5.5],"mm":0.0,"tc":13.6},{"t":1791917100,"h":"Bristol City","a":"Blackburn","o":null,"mm":0.0,"tc":14.3},{"t":1791917100,"h":"Burnley","a":"Charlton","o":null,"mm":0.0,"tc":11.5},{"t":1791917100,"h":"Cardiff","a":"Watford","o":null,"mm":0.0,"tc":14.4},{"t":1791917100,"h":"Millwall","a":"Swansea","o":null,"mm":0.1,"tc":16.4},{"t":1791917100,"h":"Wolves","a":"Bolton","o":null,"mm":0.0,"tc":12.8},{"t":1791917100,"h":"Wrexham","a":"West Brom","o":null,"mm":0.0,"tc":11.3},{"t":1791918000,"h":"Birmingham","a":"Preston","o":null,"mm":0.0,"tc":12.9},{"t":1791918000,"h":"Stoke","a":"Middlesbrough","o":null,"mm":0.0,"tc":11.2},{"t":1792003500,"h":"Norwich","a":"Southampton","o":null,"mm":1.0,"tc":15.4},{"t":1792003500,"h":"Portsmouth","a":"Sheffield United","o":null,"mm":0.2,"tc":15.5},{"t":1792003500,"h":"QPR","a":"Derby","o":null,"mm":0.2,"tc":15.7},{"t":1792004400,"h":"Lincoln","a":"West Ham","o":null,"mm":0.0,"tc":10.4},{"t":1792177200,"h":"Burnley","a":"Wolves","o":null,"mm":0.0,"tc":11.2}],
+  "D2": [{"t":1791563400,"h":"Braunschweig","a":"Holstein Kiel","o":[2.63,3.7,2.38],"mm":0.3,"tc":11.4},{"t":1791563400,"h":"Heidenheim","a":"Kaiserslautern","o":[1.85,3.8,3.6],"mm":0.5,"tc":11.8},{"t":1791630000,"h":"Darmstadt","a":"Cottbus","o":[2.2,3.5,2.8],"mm":0.0,"tc":16.4},{"t":1791630000,"h":"Magdeburg","a":"Hannover","o":[2.45,3.8,2.45],"mm":0.0,"tc":16.1},{"t":1791630000,"h":"Osnabruck","a":"Dresden","o":[2.55,3.6,2.4],"mm":1.6,"tc":12.9},{"t":1791657000,"h":"Nurnberg","a":"Wolfsburg","o":[2.45,3.8,2.45],"mm":0.0,"tc":11.0},{"t":1791718200,"h":"Bochum","a":"Bielefeld","o":[2.25,3.5,2.8],"mm":0.0,"tc":13.6},{"t":1791718200,"h":"Hertha","a":"Greuther Furth","o":[1.57,4.1,5.0],"mm":0.2,"tc":11.9},{"t":1791718200,"h":"St Pauli","a":"Karlsruhe","o":[1.7,4.0,4.1],"mm":0.0,"tc":13.7},{"t":1792168200,"h":"Cottbus","a":"Nurnberg","o":null,"mm":0.0,"tc":8.3},{"t":1792168200,"h":"Holstein Kiel","a":"Hertha","o":null,"mm":0.0,"tc":12.6}],
+  "N1": [{"t":1791568800,"h":"PSV Eindhoven","a":"Heerenveen","o":[1.25,6.5,9.5],"mm":7.8,"tc":13.4},{"t":1791642600,"h":"Go Ahead Eagles","a":"Sparta Rotterdam","o":[1.75,4.0,4.1],"mm":0.1,"tc":13.4},{"t":1791650700,"h":"Feyenoord","a":"AZ Alkmaar","o":[1.8,4.2,3.75],"mm":3.1,"tc":11.3},{"t":1791655200,"h":"For Sittard","a":"Twente","o":[6.5,5.0,1.4],"mm":0.1,"tc":11.6},{"t":1791658800,"h":"Ajax","a":"Nijmegen","o":[1.3,5.5,8.5],"mm":2.3,"tc":10.8},{"t":1791713700,"h":"Utrecht","a":"Willem II","o":[1.5,4.33,6.0],"mm":0.2,"tc":13.9},{"t":1791721800,"h":"Telstar","a":"Den Haag","o":[2.0,3.8,3.3],"mm":0.7,"tc":14.0},{"t":1791721800,"h":"Zwolle","a":"Cambuur","o":[1.95,3.75,3.5],"mm":1.5,"tc":12.8},{"t":1791729900,"h":"Excelsior","a":"Groningen","o":[2.55,3.6,2.55],"mm":0.2,"tc":13.6},{"t":1792173600,"h":"Heerenveen","a":"Excelsior","o":[1.75,4.0,4.0],"mm":0.1,"tc":9.7}],
+  "B1": [{"t":1791571500,"h":"Beveren","a":"Lommel SK","o":[1.8,3.6,3.9],"mm":1.2,"tc":14.3},{"t":1791640800,"h":"Cercle Brugge","a":"Anderlecht","o":[3.5,3.6,1.91],"mm":0.0,"tc":14.2},{"t":1791648900,"h":"RAAL La Louviere","a":"Club Brugge","o":[6.25,4.33,1.42],"mm":0.1,"tc":12.6},{"t":1791657900,"h":"Genk","a":"Kortrijk","o":[1.42,4.5,6.0],"mm":0.2,"tc":11.2},{"t":1791657900,"h":"Waregem","a":"Gent","o":[2.75,3.25,2.35],"mm":0.0,"tc":11.4},{"t":1791718200,"h":"Standard","a":"Charleroi","o":[2.9,3.25,2.25],"mm":0.0,"tc":13.8},{"t":1791727200,"h":"St. Gilloise","a":"Oud-Heverlee Leuven","o":[1.25,5.5,9.0],"mm":0.0,"tc":13.6},{"t":1791736200,"h":"Westerlo","a":"Antwerp","o":[2.0,3.6,3.2],"mm":0.0,"tc":11.8},{"t":1791738900,"h":"Mechelen","a":"St Truiden","o":[3.2,3.5,2.05],"mm":0.0,"tc":11.1}],
+  "SC0": [{"t":1791640800,"h":"Dundee United","a":"Hibernian","o":[2.65,3.6,2.32],"mm":0.0,"tc":10.8},{"t":1791640800,"h":"Falkirk","a":"Dundee","o":[2.01,3.6,3.3],"mm":0.0,"tc":10.7},{"t":1791640800,"h":"Hearts","a":"St Mirren","o":[1.39,5.25,6.0],"mm":0.0,"tc":10.5},{"t":1791640800,"h":"Rangers","a":"Kilmarnock","o":[1.1,8.5,17.0],"mm":0.2,"tc":9.8},{"t":1791716400,"h":"Motherwell","a":"Celtic","o":[4.75,4.5,1.53],"mm":0.0,"tc":9.9},{"t":1791723600,"h":"Aberdeen","a":"St Johnstone","o":[2.1,3.4,3.25],"mm":0.0,"tc":10.0}]
+};
+const JOR_TS = 1791437713;
 
 // v51 · Árbitros: multiplicador ya atenuado (bayes empírico: τ=2,0 %, φ=1,14) con 21.082 partidos, 2021-22 a 2026-27.
 //   Sólo árbitros con partidos en 2025-26 o 2026-27 en esa liga. Nombres de Flashscore; en España, los dos apellidos.
@@ -1278,6 +1310,7 @@ function setLiga(btn) {
   if (currentLiga !== 'man') populateTeams();
   populateRefs();
   if (typeof autoDibujo === 'function') autoDibujo();   // v51: al cambiar de liga, el dibujo se recalcula
+  if (typeof renderJornada === 'function') renderJornada();
 }
 
 function populateTeams() {
@@ -2169,6 +2202,113 @@ function renderFormHint() {
   el.style.borderLeftColor = viejo ? 'var(--wn)' : '';
   el.hidden = false;
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// v52 · JORNADA: próximos partidos con 1X2 de Bet365 y previsión; sólo se teclean línea y cuotas de córners
+// ─────────────────────────────────────────────────────────────────────────────
+const JOR_KEY = 'ce-jor-v1', RAIN_MM = 2, RAIN_LEAD_H = 48, HEAT_C = 30;
+let jorVals = {};
+try { jorVals = JSON.parse(localStorage.getItem(JOR_KEY)) || {}; } catch(e) { jorVals = {}; }
+function jorList(liga) {
+  const J = (typeof JORNADA !== 'undefined' && JORNADA[liga]) || [], L = LEAGUES[liga], now = Date.now() / 1000;
+  return L ? J.filter(m => m.t > now - 600 && L.db[m.h] && L.db[m.a] && m.h !== m.a) : [];
+}
+function jorKey(liga, m) { return `${liga}|${m.h}|${m.a}|${new Date(m.t * 1000).toISOString().slice(0, 10)}`; }
+function jorFlags(liga, m) {
+  const ts = typeof JOR_TS !== 'undefined' ? JOR_TS : 0, lead = (m.t - ts) / 3600;
+  const rain = m.mm != null && m.mm >= RAIN_MM && lead <= RAIN_LEAD_H, heat = m.tc != null && m.tc >= HEAT_C;
+  const q = []; if (rain) q.push('q-llu2'); if (heat) q.push('q-cal30');
+  if (habitualF3(liga, m.h)) q.push('q-3c-l'); if (habitualF3(liga, m.a)) q.push('q-3c-v');
+  return {q, rain, heat, lead};
+}
+function jorEval(liga, m, v) {
+  const L = LEAGUES[liga], ld = L.db[m.h], vd = L.db[m.a];
+  const linea = parseFloat(v.l), oO = parseFloat(v.o), oU = parseFloat(v.u);
+  const ok = isFinite(linea) && Math.abs(linea * 4 - Math.round(linea * 4)) < 1e-9 && oO > 1 && oU > 1;
+  const F = jorFlags(liga, m), qualMult = F.q.reduce((p, id) => p * QUAL_BY_ID[id].mult, 1);
+  const has1x2 = Array.isArray(m.o) && m.o.length === 3 && m.o.every(x => x > 1);
+  const M = computeModel({hf: ld[0], haf: ld[1], vf: vd[2], vaf: vd[3], lg: L.lg, goalsLg: L.goals, odds1x2: has1x2 ? m.o : null,
+    minuto: 0, gL: 0, gV: 0, cL: 0, cV: 0, rL: 0, rV: 0, linea: ok ? linea : NaN, oddO: ok ? oO : NaN, oddU: ok ? oU : NaN,
+    refMult: 1, qualMult, leagueF: L.lf, leagueSX: L.sx || null, rFrail: L.rf || null, liga});
+  const banca = parseFloat(document.getElementById('banca').value) || 1000;
+  const stake = M.side !== 'N' ? Math.min(5, Math.max(1, Math.round(banca * 0.25 * (M.edgeCol / 100) / (M.bestOdd - 1)))) : 0;
+  return {M, ok, linea, oO, oU, F, has1x2, stake, typed: [v.l, v.o, v.u].some(x => x !== undefined && x !== '')};
+}
+function jorResHTML(R) {
+  const M = R.M, f1 = x => (x >= 0 ? '+' : '') + x.toFixed(1).replace('.', ',') + ' %';
+  if (!R.ok) return `<span style="color:var(--tm);font-weight:400">${R.typed ? 'Completa línea (múltiplo de 0,25) y las dos cuotas' : 'Teclea la línea y las cuotas de córners'}</span>`;
+  if (M.side !== 'N') return `<span style="color:var(--win)">${M.side === 'O' ? 'OVER' : 'UNDER'} ${R.linea} @ ${M.bestOdd} · edge ${f1(M.bestEV)} · nivel ${M.lvl} · ${R.stake} €</span>`;
+  if (M.protoNote) return `<span style="color:var(--wn)">NO ENTRAR · ${escHTML(M.protoNote)}</span>`;
+  return `<span style="color:var(--tm)">Sin valor · Over ${f1(M.evO)} · Under ${f1(M.evU)} · hace falta ${f1(M.thr)}</span>`;
+}
+function renderJornada() {
+  const card = document.getElementById('jor-card'); if (!card) return;
+  const liga = currentLiga, list = liga === 'man' ? [] : jorList(liga);
+  if (!list.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const ts = typeof JOR_TS !== 'undefined' ? JOR_TS : 0, dT = new Date(ts * 1000), pad = x => String(x).padStart(2, '0');
+  const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], nf = (x, d = 2) => x.toFixed(d).replace('.', ',');
+  document.getElementById('jor-title').textContent = `Próximos partidos · ${LEAGUES[liga].name}`;
+  document.getElementById('jor-list').innerHTML = list.map((m, i) => {
+    const d = new Date(m.t * 1000), v = jorVals[jorKey(liga, m)] || {}, R = jorEval(liga, m, v), F = R.F;
+    const tc3 = [habitualF3(liga, m.h) && m.h, habitualF3(liga, m.a) && m.a].filter(Boolean);
+    const wx = m.mm == null ? 'sin previsión del tiempo'
+      : F.rain ? `<span style="color:var(--wn)">🌧 lluvia ${nf(m.mm, 1)} mm → ×1,03</span>`
+      : m.mm >= RAIN_MM ? `🌧 lluvia prevista ${nf(m.mm, 1)} mm, pero faltan ${Math.round(F.lead / 24)} días: aún no se aplica`
+      : m.mm >= 0.2 ? `lluvia débil (${nf(m.mm, 1)} mm)` : 'sin lluvia';
+    const meta = [R.has1x2 ? `1X2 ${m.o.map(x => nf(x)).join(' · ')}` : '<span style="color:var(--wn)">sin 1X2 todavía: equipos igualados</span>',
+      `previsión ${nf(R.M.pmfMean, 1)} córners`, wx, F.heat ? `<span style="color:var(--wn)">calor ${Math.round(m.tc)} °C → ×0,97</span>` : '',
+      tc3.length ? `<span style="color:var(--wn)">3 centrales: ${tc3.map(escHTML).join(' y ')} → ×0,98${tc3.length > 1 ? ' cada uno' : ''}</span>` : ''].filter(Boolean).join(' · ');
+    const inp = (k, ph) => `<input type="number" inputmode="decimal" step="0.01" min="0" placeholder="${ph}" value="${v[k] !== undefined ? escHTML(v[k]) : ''}" oninput="jorInput(${i},'${k}',this.value)" onchange="jorCommit(${i})">`;
+    return `<div class="jor-row">
+      <div class="jor-top"><span class="jor-when">${dias[d.getDay()]} ${d.getDate()} · ${pad(d.getHours())}:${pad(d.getMinutes())}</span><strong>${escHTML(m.h)} – ${escHTML(m.a)}</strong></div>
+      <div class="jor-meta">${meta}</div>
+      <div class="jor-in">${inp('l', 'Línea')}${inp('o', 'Over')}${inp('u', 'Under')}<button class="tbtn" onclick="jorOpen(${i})" title="Pasar al formulario: árbitro, correcciones y registrar">Abrir</button></div>
+      <div class="jor-res" id="jor-res-${i}">${jorResHTML(R)}</div></div>`;
+  }).join('');
+  const viejo = (Date.now() / 1000 - ts) > 4 * 86400;
+  const note = document.getElementById('jor-note');
+  note.innerHTML = `Cuotas 1X2 de Bet365 y previsión del tiempo tomadas el ${dias[dT.getDay()]} ${dT.getDate()}/${dT.getMonth() + 1} a las ${pad(dT.getHours())}:${pad(dT.getMinutes())}. La lluvia se aplica sola si la previsión da ${RAIN_MM} mm o más durante el partido y faltaban menos de ${RAIN_LEAD_H} h; el árbitro no se aplica aquí (pulsa <strong>Abrir</strong> para elegirlo, corregir algo o registrar la apuesta).` +
+    (viejo ? ' <strong style="color:var(--wn)">⚠ Datos de hace más de 4 días: revisa el 1X2 a mano.</strong>' : '');
+  note.style.borderLeftColor = viejo ? 'var(--wn)' : '';
+}
+function jorInput(i, k, val) {
+  const liga = currentLiga, m = jorList(liga)[i]; if (!m) return;
+  const key = jorKey(liga, m), v = jorVals[key] || (jorVals[key] = {});
+  if (val === '') delete v[k]; else v[k] = val;
+  if (!Object.keys(v).length) delete jorVals[key];
+  const el = document.getElementById('jor-res-' + i); if (el) el.innerHTML = jorResHTML(jorEval(liga, m, v));
+}
+function jorCommit(i) {      // al salir de la casilla: guardar y, si está completo, anotar en el registro de análisis
+  const liga = currentLiga, m = jorList(liga)[i]; if (!m) return;
+  const hoy = new Date().toISOString().slice(0, 10);
+  Object.keys(jorVals).forEach(k => { if (k.slice(-10) < hoy.slice(0, 10) && (Date.parse(hoy) - Date.parse(k.slice(-10))) > 3 * 864e5) delete jorVals[k]; });
+  try { localStorage.setItem(JOR_KEY, JSON.stringify(jorVals)); } catch(e) {}
+  const R = jorEval(liga, m, jorVals[jorKey(liga, m)] || {}); if (!R.ok) return;
+  const M = R.M, now = new Date(), pad = x => String(x).padStart(2, '0');
+  logAnalysis({id: Date.now(), fecha: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`, hora: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
+    liga: ligaShort(liga), local: m.h, visit: m.a, minuto: 0, gL: 0, gV: 0, rL: 0, rV: 0, cL: 0, cV: 0, linea: R.linea, oddO: R.oO, oddU: R.oU,
+    o1: R.has1x2 ? m.o[0] : '', ox: R.has1x2 ? m.o[1] : '', o2: R.has1x2 ? m.o[2] : '',
+    lamModel: +M.lamModel.toFixed(4), lamMkt: M.lamMkt !== null ? +M.lamMkt.toFixed(4) : '', lamFinal: +M.lam.toFixed(4), shape: +M.RF.toFixed(2), eel: +M.Eel.toFixed(4),
+    pOver: +(M.spO.W + M.spO.HW).toFixed(4), pUnder: +(M.spU.W + M.spU.HW).toFixed(4), evO: +M.evO.toFixed(2), evU: +M.evU.toFixed(2), side: M.side, final: ''});
+}
+function jorOpen(i) {        // pasa el partido al formulario (pestaña) con todo relleno
+  const liga = currentLiga, m = jorList(liga)[i]; if (!m) return;
+  const v = jorVals[jorKey(liga, m)] || {};
+  collectTab();
+  let t = tabsState.tabs.find(x => x.liga === liga && x.f['sel-loc'] === m.h && x.f['sel-vis'] === m.a);
+  if (!t) { const c = curTab(); t = (c && c.liga !== 'man' && !c.f['sel-loc'] && !c.f['sel-vis']) ? c : newTabObj(); if (!tabsState.tabs.includes(t)) tabsState.tabs.push(t); }
+  const has = Array.isArray(m.o) && m.o.length === 3;
+  t.liga = liga;
+  Object.assign(t.f, {'sel-loc': m.h, 'sel-vis': m.a, 'o-1': has ? String(m.o[0]) : '', 'o-x': has ? String(m.o[1]) : '', 'o-2': has ? String(m.o[2]) : '',
+    linea: v.l !== undefined ? v.l : (t.f.linea || '9.5'), 'odd-o': v.o !== undefined ? v.o : '', 'odd-u': v.u !== undefined ? v.u : ''});
+  t.qual = jorFlags(liga, m).q; t.qualSet = true; t.analyzed = false;
+  tabsState.active = t.id; saveTabs();
+  tabsReady = false; applyTab(t); tabsReady = true; renderTabBar();
+  if (v.l !== undefined && v.o !== undefined && v.u !== undefined) runAnalyze();
+  document.getElementById('card-equipos').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+window.jorInput = jorInput; window.jorCommit = jorCommit; window.jorOpen = jorOpen;
+
 function onTeamChange() {
   renderFormHint();
   const {db, lg} = leagueCtx();
@@ -2875,6 +3015,7 @@ function toast(msg,err=false) {
   document.getElementById('banca').addEventListener('input',e=>{
     try{localStorage.setItem('ce-banca',e.target.value);}catch(e2){}
     // v46: el stake se recalcula al pulsar Analizar
+    if (typeof renderJornada === 'function') renderJornada();   // v52: la lista sí se recalcula al cambiar la banca
   });
   renderExtraLeagueButtons();
   populateTeams();
@@ -2885,6 +3026,7 @@ function toast(msg,err=false) {
   updateQualDisplay();
   initTabs();
   // v51: sin seguimiento en vivo (initLive no se llama)
+  renderJornada();
   const lt = document.getElementById('leagues-table');
   if (lt) lt.innerHTML = Object.values(LEAGUES).map(L => `<tr><td>${L.name}${L.warn ? ' ⚠' : ''}</td><td>${escHTML(L.check)}</td></tr>`).join('');
 
