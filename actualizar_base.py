@@ -16,6 +16,9 @@ Requisitos: Python 3.8+ sin librerías externas.
 v51 · Además guarda el DIBUJO de los últimos 3 partidos de liga de cada equipo (Flashscore), para que la app
 marque sola «tres centrales con tres arriba». Si Flashscore falla, se conserva lo que hubiera: la base se actualiza igual.
 
+v53 · También el ÁRBITRO de cada próximo partido en cuanto Flashscore lo publica (suele ser la víspera), con el
+nombre que usa la tabla de árbitros de la app.
+
 v52 · Además guarda los PRÓXIMOS PARTIDOS de cada liga (9 días) con la cuota 1X2 de Bet365 que publica Flashscore y la
 previsión de lluvia y temperatura a la hora del partido (Open-Meteo), para que en la app sólo haya que teclear la línea
 y las cuotas de córners. Si algo falla, se conserva lo anterior.
@@ -397,6 +400,26 @@ def weather_at(lat, lon, ts):
     return round(sum(x[0] for x in v), 1), round(sum(x[1] for x in v) / 3, 1)
 
 
+# Árbitros españoles: abreviatura de Flashscore → nombre de la tabla de la app (dos apellidos). Resto de ligas: el de Flashscore.
+REF_ES = {"Munuera J.": "Munuera Montero", "Garcia V.": "García Verdura", "Soto Grado C.": "Soto Grado", "Martinez J.": "Martínez Munuera", "Ortiz M.": "Ortiz Arias", "Maeso F.": "Hernández Maeso", "Alberola J.": "Alberola Rojas", "Busquets M.": "Busquets Ferrer", "Hernandez A.": "Hernández Hernández", "Quintero A.": "Quintero González", "Sesma M.": "Sesma Espinosa", "Diaz I.": "Díaz de Mera", "Bestard Servera L.": "Bestard Servera", "Cordero A.": "Cordero Vega", "Orellana M.": "Orellana Cid", "Muniz C.": "Muñiz Muñoz", "De Burgos R.": "De Burgos Bengoetxea", "Gonzalez Esteban J. A.": "González Esteban", "Manzano J.": "Gil Manzano", "Mallo E.": "Mallo Fernández", "Morales P.": "Morales Moreno", "Palencia D.": "Palencia Caballero", "Guzman J.": "Guzmán Mansilla", "Ojaos A.": "Ojaos Valera", "Cuadra G.": "Cuadra Fernández", "Etayo G.": "Etayo Herrera", "Ruiz A.": "Muñiz Ruiz", "Arcediano D.": "Arcediano Monescillo", "Cid G.": "Cid Camacho", "De Aza M. H.": "Huerta de Aza", "Moreno A.": "Moreno Aragón", "Muresan S.": "Muresan", "Gordillo J. M.": "Gordillo Escamilla", "Galech I.": "Galech Apezteguía", "Morilla A.": "Morilla Turrión", "Lax S.": "Lax Franco", "Romero G.": "Romero Freixas", "Sanchez R.": "Sánchez López", "Ais S.": "Ais Reig", "Fuentes A.": "Fuentes Molina", "Dominguez A.": "Domínguez Cervantes", "Perez M.": "Pérez Hernández", "Rivera Olmedo O.": "Rivera Olmedo", "de Ena Wolf A.": "De Ena Wolf"}
+
+
+def ref_name(lg, fs):
+    if not fs:
+        return None
+    if lg in ('SP1', 'SP2'):
+        if fs == 'Sanchez J.':          # Flashscore llama igual a Sánchez Martínez (1ª) y a Sánchez Villalobos (2ª)
+            return 'Sánchez Martínez' if lg == 'SP1' else 'Sánchez Villalobos'
+        return REF_ES.get(fs, fs)
+    return fs
+
+
+def fs_referee(mid):
+    s = fs_get(f'https://global.flashscore.ninja/2/x/feed/df_sui_1_{mid}', feed=True)
+    g = re.search(r'MIT÷REF¬MIV÷([^¬]*)', s)
+    return g.group(1).strip() if g and g.group(1).strip() else None
+
+
 def build_jornada(lg, teams, now):
     from concurrent.futures import ThreadPoolExecutor
     nm = NM.get(lg) or {}
@@ -405,13 +428,14 @@ def build_jornada(lg, teams, now):
     fx.sort(key=lambda m: m['ts'])
     with ThreadPoolExecutor(6) as ex:
         odds = list(ex.map(lambda m: _safe(fs_1x2, m['id'], m['ja'], m['jb']), fx))
+        refs = list(ex.map(lambda m: _safe(fs_referee, m['id']) if m['ts'] <= now + 4 * 86400 else None, fx))
     prefetch_forecasts([tuple((COORDS.get(lg) or {}).get(nm[m['h']])) for m in fx if (COORDS.get(lg) or {}).get(nm[m['h']])])
     out = []
-    for m, o in zip(fx, odds):
+    for m, o, rf in zip(fx, odds, refs):
         h, a = nm[m['h']], nm[m['a']]
         c = (COORDS.get(lg) or {}).get(h)
         mm, tc = _safe(weather_at, c[0], c[1], m['ts']) or (None, None) if c else (None, None)
-        out.append(dict(t=m['ts'], h=h, a=a, o=o, mm=mm, tc=tc))
+        out.append(dict(t=m['ts'], h=h, a=a, o=o, mm=mm, tc=tc, r=ref_name(lg, rf)))
     return out
 
 
@@ -431,13 +455,13 @@ def jornada_block(html, R, now=None):
         try:
             j = build_jornada(lg, set(R[lg]['db']), now)
             new[key] = j; fresh += 1
-            print(f'  jornada {lg}: {len(j)} partidos · con 1X2 {sum(1 for x in j if x["o"])} · con previsión {sum(1 for x in j if x["mm"] is not None)}')
+            print(f'  jornada {lg}: {len(j)} partidos · con 1X2 {sum(1 for x in j if x["o"])} · con previsión {sum(1 for x in j if x["mm"] is not None)} · con árbitro {sum(1 for x in j if x.get("r"))}')
         except Exception as e:
             new[key] = old.get(key, [])
             print(f'  aviso: próximos partidos de {lg} no actualizados ({e}); se conservan los anteriores')
     ts = now if fresh else int(re.search(r'const JOR_TS = (\d+);', m.group(0)).group(1))
     body = ',\n'.join(f'  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False, separators=(",", ":"))}' for k, v in new.items())
-    block = ("// Próximos partidos (Flashscore): t = inicio (UTC, segundos), o = 1X2 de Bet365, mm = lluvia prevista en las 3 h del partido, tc = °C.\n"
+    block = ("// Próximos partidos (Flashscore): t = inicio (UTC, segundos), o = 1X2 de Bet365, mm = lluvia prevista en las 3 h del partido, tc = °C, r = árbitro.\n"
              f"const JORNADA = {{\n{body}\n}};\nconst JOR_TS = {ts};\n")
     return block, m
 
