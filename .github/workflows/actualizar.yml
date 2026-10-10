@@ -1,8 +1,8 @@
 name: Actualizar base CornerEdge
 on:
   schedule:
-    - cron: '0 6 * * 2'
-    - cron: '0 6 * * 5'
+      - cron: '0 5,11,17 * * *'   # todos los días a las 07:00, 13:00 y 19:00
+    
   workflow_dispatch:
 permissions:
   contents: write
