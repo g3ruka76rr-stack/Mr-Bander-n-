@@ -319,9 +319,25 @@ def fs_fixtures(slug):
     return out
 
 
+def _odds_json(mid):
+    """Pide las cuotas como lo hace la web de Flashscore (navegador + origen flashscore.es); 3 intentos con espera."""
+    import time
+    req = urllib.request.Request(FS_ODDS + mid, headers={'User-Agent': FS_UA, 'Accept': 'application/json',
+                                                         'Origin': 'https://www.flashscore.es', 'Referer': 'https://www.flashscore.es/'})
+    last = None
+    for k in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return json.loads(r.read().decode('utf-8'))
+        except Exception as e:
+            last = e
+            time.sleep(2 * (k + 1))
+    raise last
+
+
 def fs_1x2(mid, ja, jb):
     """Cuota 1X2 de Bet365 (casa 16) tal como la muestra Flashscore España, o None."""
-    j = _get_json(FS_ODDS + mid, timeout=20)
+    j = _odds_json(mid)
     for o in (((j.get('data') or {}).get('findOddsByEventId') or {}).get('odds') or []):
         if o.get('bookmakerId') == 16 and o.get('bettingType') == 'HOME_DRAW_AWAY' and o.get('bettingScope') == 'FULL_TIME':
             v = {i.get('eventParticipantId'): i.get('value') for i in o.get('odds', [])}
@@ -420,14 +436,23 @@ def fs_referee(mid):
     return g.group(1).strip() if g and g.group(1).strip() else None
 
 
-def build_jornada(lg, teams, now):
+def build_jornada(lg, teams, now, prev=None):
     from concurrent.futures import ThreadPoolExecutor
     nm = NM.get(lg) or {}
     fx = [m for m in fs_fixtures(FS_SLUG[lg]) if now - 7200 <= m['ts'] <= now + JOR_DIAS * 86400
           and nm.get(m['h']) in teams and nm.get(m['a']) in teams]
     fx.sort(key=lambda m: m['ts'])
-    with ThreadPoolExecutor(6) as ex:
+    with ThreadPoolExecutor(4) as ex:
         odds = list(ex.map(lambda m: _safe(fs_1x2, m['id'], m['ja'], m['jb']), fx))
+    # v54 · segunda pasada, uno a uno, para los que fallaron (límite de peticiones de Flashscore)
+    import time
+    for i, m in enumerate(fx):
+        if odds[i] is None:
+            time.sleep(1)
+            odds[i] = _safe(fs_1x2, m['id'], m['ja'], m['jb'])
+    # y si aun así falta, se conserva la 1X2 de la pasada anterior para ese mismo partido
+    old_o = {(x.get('h'), x.get('a'), x.get('t')): x.get('o') for x in (prev or [])}
+    with ThreadPoolExecutor(4) as ex:
         refs = list(ex.map(lambda m: _safe(fs_referee, m['id']) if m['ts'] <= now + 4 * 86400 else None, fx))
     prefetch_forecasts([tuple((COORDS.get(lg) or {}).get(nm[m['h']])) for m in fx if (COORDS.get(lg) or {}).get(nm[m['h']])])
     out = []
@@ -435,6 +460,7 @@ def build_jornada(lg, teams, now):
         h, a = nm[m['h']], nm[m['a']]
         c = (COORDS.get(lg) or {}).get(h)
         mm, tc = _safe(weather_at, c[0], c[1], m['ts']) or (None, None) if c else (None, None)
+        o = o or old_o.get((h, a, m['ts']))
         out.append(dict(t=m['ts'], h=h, a=a, o=o, mm=mm, tc=tc, r=ref_name(lg, rf)))
     return out
 
@@ -453,7 +479,7 @@ def jornada_block(html, R, now=None):
     for lg, _sfx, _n in LEAGUES:
         key = APP_KEY.get(lg, lg)
         try:
-            j = build_jornada(lg, set(R[lg]['db']), now)
+            j = build_jornada(lg, set(R[lg]['db']), now, old.get(key))
             new[key] = j; fresh += 1
             print(f'  jornada {lg}: {len(j)} partidos · con 1X2 {sum(1 for x in j if x["o"])} · con previsión {sum(1 for x in j if x["mm"] is not None)} · con árbitro {sum(1 for x in j if x.get("r"))}')
         except Exception as e:
