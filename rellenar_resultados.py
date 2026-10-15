@@ -14,7 +14,7 @@ Requisitos: Python 3.8+ sin librerías externas.
 import csv, io, sys, urllib.request, datetime as dt, collections
 
 LIGA = {'La Liga': 'SP1', 'Segunda': 'SP2', 'Premier': 'E0', 'Serie A': 'I1', 'Bundesliga': 'D1',
-        'Ligue 1': 'F1', 'Portugal': 'P1', 'Championship': 'E1', '2. Bundesliga': 'D2', 'Eredivisie': 'N1', 'Bélgica': 'B1', 'Escocia': 'SC0'}
+        'Ligue 1': 'F1', 'Portugal': 'P1', 'Championship': 'E1', '2. Bundesliga': 'D2', 'Eredivisie': 'N1', 'Bélgica': 'B1', 'Escocia': 'SC0', 'Ligue 2': 'F2', 'Serie B': 'I2'}
 URL = 'https://www.football-data.co.uk/mmz4281/{season}/{league}.csv'
 
 
