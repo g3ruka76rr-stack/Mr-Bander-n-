@@ -14,17 +14,29 @@ for lg in FS_SLUG:
         resumen['ligas'][lg] = f'ERROR lista: {e}'
         continue
     filas = []
+    ok = err = vacias = 0
+    primer_error = None
     for m in partidos:
         try:
             crudo = fs_get(f"https://global.flashscore.ninja/2/x/feed/df_st_1_{m['id']}", feed=True)
         except Exception as e:
             crudo = f'ERROR: {e}'
+        if crudo.startswith('ERROR') or not crudo:
+            err += 1
+            if primer_error is None:
+                primer_error = crudo[:300]
+        elif len(crudo) < 500:
+            vacias += 1
+        else:
+            ok += 1
         filas.append({'id': m['id'], 'day': str(m['day']), 'h': m['h'], 'a': m['a'],
                       'hg': m['hg'], 'ag': m['ag'], 'stats_crudo': crudo})
         time.sleep(0.5)
     with open(os.path.join(salida, f'{lg}.json'), 'w', encoding='utf-8') as f:
         json.dump(filas, f, ensure_ascii=False)
     resumen['ligas'][lg] = len(filas)
-    print(lg, len(filas), flush=True)
+    print(f'{lg}: {len(filas)} partidos · con datos {ok} · vacías {vacias} · error {err}', flush=True)
+    if primer_error:
+        print(f'  primer error {lg}: {primer_error}', flush=True)
 with open(os.path.join(salida, 'resumen.json'), 'w', encoding='utf-8') as f:
     json.dump(resumen, f, ensure_ascii=False, indent=1)
