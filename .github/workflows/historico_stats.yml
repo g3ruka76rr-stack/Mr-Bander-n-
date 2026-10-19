@@ -1,0 +1,21 @@
+name: Histórico de estadísticas
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  historico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Descargar estadísticas terminadas
+        run: python3 historico/dump_historico.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historico-stats
+          path: salida_historico/
