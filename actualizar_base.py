@@ -500,7 +500,7 @@ def build_jornada(lg, teams, now, prev=None):
     # y si aun así falta, se conserva la 1X2 de la pasada anterior para ese mismo partido
     old_o = {(x.get('h'), x.get('a'), x.get('t')): x.get('o') for x in (prev or [])}
     with ThreadPoolExecutor(4) as ex:
-        refs = list(ex.map(lambda m: _safe(fs_referee, m['id']) if m['ts'] <= now + 4 * 86400 else None, fx))
+        refs = list(ex.map(lambda m: _safe(fs_referee, m['id']) if m['ts'] <= now + 6 * 86400 else None, fx))
     pts = [tuple((COORDS.get(lg) or {}).get(nm[m['h']])) for m in fx if (COORDS.get(lg) or {}).get(nm[m['h']])]
     prefetch_forecasts(pts)
     prefetch_ensemble(pts)
