@@ -1823,7 +1823,7 @@ function updateTeamLines() {
   out.innerHTML = teamLineRow('LOC', `Local ${locName}`, mu.muH, v('tl-l-h'), v('tl-o-h'), v('tl-u-h'), banca, pin) + '<br>' +
                   teamLineRow('VIS', `Visitante ${visName}`, mu.muA, v('tl-l-a'), v('tl-o-a'), v('tl-u-a'), banca, pin);
 }
-['tl-l-h','tl-o-h','tl-u-h','tl-l-a','tl-o-a','tl-u-a','sel-loc','sel-vis'].forEach(id => document.getElementById(id).addEventListener(id.startsWith('sel') ? 'change' : 'input', updateTeamLines));
+['tl-l-h','tl-o-h','tl-u-h','tl-l-a','tl-o-a','tl-u-a','sel-loc','sel-vis'].forEach(id => document.getElementById(id).addEventListener(id.startsWith('sel') ? 'change' : 'input', () => { collectTab(); updateTeamLines(); }));
 function computeModel(inp) {
   const {hf, haf, vf, vaf, lg, goalsLg, odds1x2, minuto, gL, gV, cL, cV, rL, rV,
          linea, oddO, oddU, refMult = 1, qualMult = 1} = inp;
@@ -1945,7 +1945,7 @@ function clearErr()   { const e=document.getElementById('err-msg'); e.hidden=tru
 // ─────────────────────────────────────────────────────────────────────────────
 const TABS_KEY = 'ce-tabs-v1';
 const TAB_FIELDS = ['sel-loc','sel-vis','o-1','o-x','o-2','minuto','g-loc','g-vis','c-loc','c-vis','r-loc','r-vis',
-  'sel-ref','linea','odd-o','odd-u','m-lhf','m-vaf','m-lhc','m-vac'];
+  'sel-ref','linea','odd-o','odd-u','m-lhf','m-vaf','m-lhc','m-vac','tl-l-h','tl-o-h','tl-u-h','tl-l-a','tl-o-a','tl-u-a'];
 let tabsState = {active: null, tabs: []};
 let tabsReady = false;
 function newTabObj() { return {id: 't' + Date.now() + Math.floor(Math.random()*1000), liga: 'll', f: {minuto: '0', 'g-loc':'0','g-vis':'0','c-loc':'0','c-vis':'0','r-loc':'0','r-vis':'0', linea:'9.5'}, qual: [], analyzed: false, side: null}; }
@@ -1974,6 +1974,7 @@ function applyTab(t) {
   TAB_FIELDS.forEach(id => { const el = document.getElementById(id); if (!el) return;
     el.value = t.f[id] !== undefined ? t.f[id] : (el.tagName === 'SELECT' ? '' : el.defaultValue); });
   onTeamChange();
+  if (typeof updateTeamLines === 'function') updateTeamLines();   // v55: córners por equipo con los equipos de la pestaña
   clearQual();
   if (t.qualSet) (t.qual || []).forEach(id => { const el = document.getElementById(id); if (el) el.checked = true; });
   else autoDibujo();                                   // pestaña nueva o guardada por una versión anterior: dibujo automático
