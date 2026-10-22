@@ -498,7 +498,7 @@ def build_jornada(lg, teams, now, prev=None):
             time.sleep(1)
             odds[i] = _safe(fs_1x2, m['id'], m['ja'], m['jb'])
     # y si aun así falta, se conserva la 1X2 de la pasada anterior para ese mismo partido
-    old_o = {(x.get('h'), x.get('a'), x.get('t')): x.get('o') for x in (prev or [])}
+    old_o = {(x.get('h'), x.get('a'), x.get('t')): (x.get('o'), x.get('ot')) for x in (prev or [])}   # v56: cuota + hora en que se tomó
     with ThreadPoolExecutor(4) as ex:
         refs = list(ex.map(lambda m: _safe(fs_referee, m['id']) if m['ts'] <= now + 6 * 86400 else None, fx))
     pts = [tuple((COORDS.get(lg) or {}).get(nm[m['h']])) for m in fx if (COORDS.get(lg) or {}).get(nm[m['h']])]
@@ -509,9 +509,11 @@ def build_jornada(lg, teams, now, prev=None):
         h, a = nm[m['h']], nm[m['a']]
         c = (COORDS.get(lg) or {}).get(h)
         mm, tc = _safe(weather_at, c[0], c[1], m['ts']) or (None, None) if c else (None, None)
-        o = o or old_o.get((h, a, m['ts']))
+        ot = now if o else None                       # v56: hora de la cuota fresca
+        if not o:                                     # si no hay cuota nueva, se conserva la anterior CON su hora
+            o, ot = old_o.get((h, a, m['ts']), (None, None))
         pr = _safe(rain_prob, c[0], c[1], m['ts']) if c else None
-        out.append(dict(t=m['ts'], h=h, a=a, o=o, mm=mm, tc=tc, pr=pr, r=ref_name(lg, rf)))
+        out.append(dict(t=m['ts'], h=h, a=a, o=o, ot=ot, mm=mm, tc=tc, pr=pr, r=ref_name(lg, rf)))
     return out
 
 
