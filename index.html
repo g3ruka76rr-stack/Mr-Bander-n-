@@ -2398,7 +2398,7 @@ let jorVals = {};
 try { jorVals = JSON.parse(localStorage.getItem(JOR_KEY)) || {}; } catch(e) { jorVals = {}; }
 function jorList(liga) {
   const J = (typeof JORNADA !== 'undefined' && JORNADA[liga]) || [], L = LEAGUES[liga], now = Date.now() / 1000;
-  return L ? J.filter(m => m.t <= now && m.t > now - 9000 && L.db[m.h] && L.db[m.a] && m.h !== m.a) : [];   // v57: sólo partidos en juego (desde el inicio hasta 150 min)
+  return L ? J.filter(m => m.t <= now && m.t > now - 10800 && L.db[m.h] && L.db[m.a] && m.h !== m.a) : [];   // v57: partidos empezados hasta 180 min (un partido completo dura menos)
 }
 function jorKey(liga, m) { return `${liga}|${m.h}|${m.a}|${new Date(m.t * 1000).toISOString().slice(0, 10)}`; }
 function jorFlags(liga, m) {
