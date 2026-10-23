@@ -403,7 +403,7 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
       </div>
     </div>
 
-    <div class="card" id="tl-card">
+    <div class="card" id="tl-card" style="display:none">   <!-- v57: sólo en vivo: oculto -->
       <div class="ch"><span class="dot"></span>Bet365 — Córners por equipo <span style="font-weight:400;color:var(--tm)">(prepartido)</span></div>
       <div class="cb">
         <div class="g2">
@@ -2398,7 +2398,7 @@ let jorVals = {};
 try { jorVals = JSON.parse(localStorage.getItem(JOR_KEY)) || {}; } catch(e) { jorVals = {}; }
 function jorList(liga) {
   const J = (typeof JORNADA !== 'undefined' && JORNADA[liga]) || [], L = LEAGUES[liga], now = Date.now() / 1000;
-  return L ? J.filter(m => m.t > now - 600 && L.db[m.h] && L.db[m.a] && m.h !== m.a) : [];
+  return L ? J.filter(m => m.t <= now && m.t > now - 9000 && L.db[m.h] && L.db[m.a] && m.h !== m.a) : [];   // v57: sólo partidos en juego (desde el inicio hasta 150 min)
 }
 function jorKey(liga, m) { return `${liga}|${m.h}|${m.a}|${new Date(m.t * 1000).toISOString().slice(0, 10)}`; }
 function jorFlags(liga, m) {
@@ -2454,30 +2454,11 @@ function renderJornada() {
   const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], nf = (x, d = 2) => x.toFixed(d).replace('.', ',');
   document.getElementById('jor-title').textContent = `Próximos partidos · ${LEAGUES[liga].name}`;
   document.getElementById('jor-list').innerHTML = list.map((m, i) => {
-    const d = new Date(m.t * 1000), v = jorVals[jorKey(liga, m)] || {}, R = jorEval(liga, m, v), F = R.F;
-    const tc3 = [habitualF3(liga, m.h) && m.h, habitualF3(liga, m.a) && m.a].filter(Boolean);
-    const pct = x => Math.round(x * 100) + ' %';
-    const wx = m.pr != null
-      ? (m.pr >= 0.05 ? `<span style="color:var(--wn)">🌧 prob. lluvia ≥2 mm ${pct(m.pr)}${m.mm != null ? ` (${nf(m.mm, 1)} mm previstos)` : ''} → ×${rainMult(m.pr).toFixed(3).replace('.', ',')}</span>`
-                      : `sin lluvia (prob. ≥2 mm ${pct(m.pr)})`)
-      : m.mm == null ? 'sin previsión del tiempo'
-      : F.rain ? `<span style="color:var(--wn)">🌧 lluvia ${nf(m.mm, 1)} mm → ×1,03</span>`
-      : m.mm >= RAIN_MM ? `🌧 lluvia prevista ${nf(m.mm, 1)} mm, pero faltan ${Math.round(F.lead / 24)} días: aún no se aplica`
-      : m.mm >= 0.2 ? `lluvia débil (${nf(m.mm, 1)} mm)` : 'sin lluvia';
-    const otTxt = m.ot ? new Date(m.ot * 1000).toLocaleString('es-ES', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : null;
-    const otVieja = m.ot && (Date.now() / 1000 - m.ot) > 6 * 3600;   // v56: cuota de más de 6 h
-    const meta = [R.has1x2 ? `1X2 ${m.o.map(x => nf(x)).join(' · ')}` + (otTxt ? ` <span style="color:${otVieja ? 'var(--wn)' : 'var(--tm)'}">(tomada ${otTxt}${otVieja ? ' · vieja' : ''})</span>` : '') : '<span style="color:var(--wn)">sin 1X2 todavía: equipos igualados</span>',
-      `previsión ${nf(R.M.pmfMean, 1)} córners`, wx, F.heat ? `<span style="color:var(--wn)">calor ${Math.round(m.tc)} °C → ×0,97</span>` : '',
-      tc3.length ? `<span style="color:var(--wn)">3 centrales: ${tc3.map(escHTML).join(' y ')} → ×0,98${tc3.length > 1 ? ' cada uno' : ''}</span>` : '',
-      (() => { const r = jorRef(liga, m); if (!r.name) return 'árbitro sin designar';
-        if (!r.known) return `árbitro ${escHTML(r.name)} (sin historial: sin ajuste)`;
-        const pc = (r.mult - 1) * 100; return Math.abs(pc) < 0.05 ? `árbitro ${escHTML(r.name)} (×1,000)` : `<span style="color:var(--wn)">árbitro ${escHTML(r.name)} → ×${r.mult.toFixed(3).replace('.', ',')}</span>`; })()].filter(Boolean).join(' · ');
-    const inp = (k, ph) => `<input type="number" inputmode="decimal" step="0.01" min="0" placeholder="${ph}" value="${v[k] !== undefined ? escHTML(v[k]) : ''}" oninput="jorInput(${i},'${k}',this.value)" onchange="jorCommit(${i})">`;
+    const d = new Date(m.t * 1000);
+    const enJuego = m.t <= Date.now() / 1000;
     return `<div class="jor-row">
-      <div class="jor-top"><span class="jor-when">${dias[d.getDay()]} ${d.getDate()} · ${pad(d.getHours())}:${pad(d.getMinutes())}</span><strong>${escHTML(m.h)} – ${escHTML(m.a)}</strong></div>
-      <div class="jor-meta">${meta}</div>
-      <div class="jor-in">${inp('l', 'Línea')}${inp('o', 'Over')}${inp('u', 'Under')}<button class="tbtn" onclick="jorOpen(${i})" title="Pasar al formulario: árbitro, correcciones y registrar">Abrir</button></div>
-      <div class="jor-res" id="jor-res-${i}">${jorResHTML(R)}</div></div>`;
+      <div class="jor-top"><span class="jor-when">${dias[d.getDay()]} ${d.getDate()} · ${pad(d.getHours())}:${pad(d.getMinutes())}${enJuego ? ' · en juego' : ''}</span><strong>${escHTML(m.h)} – ${escHTML(m.a)}</strong></div>
+      <div class="jor-in"><button class="tbtn" onclick="jorOpen(${i})" title="Pasar al formulario con equipos y árbitro">Abrir</button></div></div>`;
   }).join('');
   const viejo = (Date.now() / 1000 - ts) > 4 * 86400;
   const note = document.getElementById('jor-note');
