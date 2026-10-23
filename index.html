@@ -1425,6 +1425,8 @@ function populateRefs(targetSelId='sel-ref') {
   const sel = document.getElementById(targetSelId);
   const prev = sel.value;
   sel.innerHTML = '<option value="">— Sin ajuste —</option>';
+  const ex = (typeof curTab === 'function' && curTab() && curTab().f && curTab().f['sel-ref']) || '';   // v57: árbitro de la lista aunque no esté en la tabla
+  if (targetSelId === 'sel-ref' && ex && !refDB[ex]) { const o0 = document.createElement('option'); o0.value = ex; o0.textContent = ex + '  (sin historial: sin ajuste)'; sel.appendChild(o0); }
   Object.entries(refDB).sort((a,b) => a[0].localeCompare(b[0], 'es')).forEach(([name, mult]) => {
     const o = document.createElement('option');
     o.value = name;
@@ -2515,7 +2517,8 @@ function jorOpen(i) {        // pasa el partido al formulario (pestaña) con tod
   t.liga = liga;
   Object.assign(t.f, {'sel-loc': m.h, 'sel-vis': m.a, 'o-1': has ? String(m.o[0]) : '', 'o-x': has ? String(m.o[1]) : '', 'o-2': has ? String(m.o[2]) : '',
     linea: v.l !== undefined ? v.l : (t.f.linea || '9.5'), 'odd-o': v.o !== undefined ? v.o : '', 'odd-u': v.u !== undefined ? v.u : '',
-    'sel-ref': jorRef(liga, m).known ? m.r : '', 'rain-p': String(jorFlags(liga, m).rainP || 0)});
+    'sel-ref': m.r || '', 'rain-p': String(jorFlags(liga, m).rainP || 0)});   // v57: árbitro de la lista aunque no esté en la tabla (sin ajuste)
+  if (m.r) { const sr = document.getElementById('sel-ref'); if (sr && ![...sr.options].some(o => o.value === m.r)) sr.add(new Option(m.r, m.r)); }
   t.qual = jorFlags(liga, m).q; t.qualSet = true; t.analyzed = false;
   tabsState.active = t.id; saveTabs();
   tabsReady = false; applyTab(t); tabsReady = true; renderTabBar();
