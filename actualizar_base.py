@@ -486,8 +486,13 @@ def fs_referee(mid):
 def build_jornada(lg, teams, now, prev=None):
     from concurrent.futures import ThreadPoolExecutor
     nm = NM.get(lg) or {}
-    fx = [m for m in fs_fixtures(FS_SLUG[lg]) if now - 7200 <= m['ts'] <= now + JOR_DIAS * 86400
-          and nm.get(m['h']) in teams and nm.get(m['a']) in teams]
+    raw = fs_fixtures(FS_SLUG[lg])
+    win = [m for m in raw if now - 7200 <= m['ts'] <= now + JOR_DIAS * 86400]
+    fx = [m for m in win if nm.get(m['h']) in teams and nm.get(m['a']) in teams]
+    # v56 · diagnóstico: partidos que Flashscore da, los que caen en la ventana y los que no se emparejan con football-data
+    sin = [m for m in win if m not in fx]
+    print(f"    {lg}: Flashscore {len(raw)} por jugar · en ventana {len(win)} · sin emparejar {len(sin)}"
+          + (" → " + "; ".join(f"{m['h']} – {m['a']} ({nm.get(m['h'], '¿?')} / {nm.get(m['a'], '¿?')})" for m in sin[:10]) if sin else ""))
     fx.sort(key=lambda m: m['ts'])
     with ThreadPoolExecutor(4) as ex:
         odds = list(ex.map(lambda m: _safe(fs_1x2, m['id'], m['ja'], m['jb']), fx))
@@ -499,6 +504,7 @@ def build_jornada(lg, teams, now, prev=None):
             odds[i] = _safe(fs_1x2, m['id'], m['ja'], m['jb'])
     # y si aun así falta, se conserva la 1X2 de la pasada anterior para ese mismo partido
     old_o = {(x.get('h'), x.get('a'), x.get('t')): (x.get('o'), x.get('ot')) for x in (prev or [])}   # v56: cuota + hora en que se tomó
+    old_r = {(x.get('h'), x.get('a'), x.get('t')): x.get('r') for x in (prev or []) if x.get('r')}   # v57: árbitro anterior
     with ThreadPoolExecutor(4) as ex:
         refs = list(ex.map(lambda m: _safe(fs_referee, m['id']) if m['ts'] <= now + 6 * 86400 else None, fx))
     pts = [tuple((COORDS.get(lg) or {}).get(nm[m['h']])) for m in fx if (COORDS.get(lg) or {}).get(nm[m['h']])]
@@ -513,7 +519,14 @@ def build_jornada(lg, teams, now, prev=None):
         if not o:                                     # si no hay cuota nueva, se conserva la anterior CON su hora
             o, ot = old_o.get((h, a, m['ts']), (None, None))
         pr = _safe(rain_prob, c[0], c[1], m['ts']) if c else None
-        out.append(dict(t=m['ts'], h=h, a=a, o=o, ot=ot, mm=mm, tc=tc, pr=pr, r=ref_name(lg, rf)))
+        rn = ref_name(lg, rf) or old_r.get((h, a, m['ts']))   # v57: si hoy no responde, no se borra el árbitro ya designado
+        out.append(dict(t=m['ts'], h=h, a=a, o=o, ot=ot, mm=mm, tc=tc, pr=pr, r=rn))
+    have = {(x['h'], x['a'], x['t']) for x in out}
+    for x in (prev or []):   # v57: no se borran partidos ya listados si Flashscore no los devuelve esta vez
+        k = (x.get('h'), x.get('a'), x.get('t'))
+        if k not in have and x.get('t', 0) > now - 7200 and x.get('t', 0) <= now + JOR_DIAS * 86400:
+            out.append(x); print(f'    {lg}: se conserva {x.get("h")} – {x.get("a")} (ya no lo devuelve Flashscore)')
+    out.sort(key=lambda x: x['t'])
     return out
 
 
