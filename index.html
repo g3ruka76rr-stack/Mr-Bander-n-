@@ -3541,6 +3541,22 @@ function toast(msg,err=false) {
 
 })();
 </script>
-<script>if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}</script>
+<script>if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+// v59 · al elegir local y visitante en el formulario, rellena las cuotas 1X2 de la lista de partidos (si existe)
+function jorAutoFill() {
+  try {
+    const loc = document.getElementById('sel-loc').value, vis = document.getElementById('sel-vis').value;
+    const J = (typeof JORNADA !== 'undefined' && currentLiga && JORNADA[currentLiga]) || [];
+    const m = J.find(x => x.h === loc && x.a === vis);
+    if (!m || !m.o) return;
+    ['o-1', 'o-x', 'o-2'].forEach((id, i) => { document.getElementById(id).value = String(m.o[i].toFixed(2)); });
+    const ref = document.getElementById('sel-ref');
+    if (ref && m.r && ![...ref.options].some(o => o.value === m.r)) { const op = document.createElement('option'); op.value = m.r; op.textContent = m.r + ' (sin historial: sin ajuste)'; ref.appendChild(op); }
+    if (ref && m.r) ref.value = m.r;
+    if (typeof liveCheck === 'function') { try { scheduleLiveCheck(); } catch (e) {} }
+  } catch (e) { /* sin lista: nada que rellenar */ }
+}
+['sel-loc', 'sel-vis'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', jorAutoFill); });
+</script>
 </body>
 </html>
