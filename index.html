@@ -1422,6 +1422,7 @@ function setLiga(btn) {
   populateRefs();
   if (typeof autoDibujo === 'function') autoDibujo();   // v51: al cambiar de liga, el dibujo se recalcula
   if (typeof renderJornada === 'function') renderJornada();
+  if (typeof jorAutoLoad === 'function') jorAutoLoad(currentLiga);   // v61
 }
 
 function populateTeams() {
@@ -2558,7 +2559,51 @@ let jorVals = {};
 try { jorVals = JSON.parse(localStorage.getItem(JOR_KEY)) || {}; } catch(e) { jorVals = {}; }
 function jorList(liga) {
   const J = (typeof JORNADA !== 'undefined' && JORNADA[liga]) || [], L = LEAGUES[liga], now = Date.now() / 1000;
-  return L ? J.filter(m => m.t > now - 10800 && L.db[m.h] && L.db[m.a] && m.h !== m.a) : [];   // todos los de la liga (9 días) + los empezados hasta 180 min
+  const base = L ? J.filter(m => m.t > now - 10800 && L.db[m.h] && L.db[m.a] && m.h !== m.a) : [];   // todos los de la liga (9 días) + los empezados hasta 180 min
+  if (base.length) return base;
+  return (jorAuto[liga] && jorAuto[liga].list) || [];   // v61: si la base no trae partidos futuros, los de Flashscore
+}
+// v61 · partidos automáticos: al pulsar una liga se leen sus próximos partidos de Flashscore (9 días) con su 1X2 de Bet365
+var jorAuto = {};
+async function jorAutoLoad(liga) {
+  const L = LEAGUES[liga]; if (!L || liga === 'man') return;
+  const now = Date.now() / 1000;
+  const hasBase = ((typeof JORNADA !== 'undefined' && JORNADA[liga]) || []).some(m => m.t > now - 10800);
+  if (hasBase) { renderJornada(); return; }
+  const c = jorAuto[liga];
+  if (c && Date.now() - c.t < 10 * 60e3) { renderJornada(); return; }
+  const card = document.getElementById('jor-card');
+  if (card) {
+    card.style.display = '';
+    document.getElementById('jor-title').textContent = 'Próximos partidos · ' + L.name;
+    document.getElementById('jor-list').innerHTML = '<div class="empty-tbl">Leyendo partidos de Flashscore…</div>';
+    document.getElementById('jor-note').textContent = '';
+  }
+  let list = [], err = null;
+  try {
+    const days = await Promise.all([...Array(9).keys()].map(d => fsListDay(d).catch(() => [])));
+    const seen = new Set(), found = [];
+    for (const arr of days) for (const m of arr) {
+      if (m.liga !== liga || seen.has(m.id)) continue; seen.add(m.id);
+      const h = fsMapTeam(m.home, liga), a = fsMapTeam(m.away, liga);
+      found.push({t: Math.round(m.start / 1000), h: h || m.home, a: a || m.away, id: m.id, ja: m.ja, jb: m.jb, o: null, pr: null, mm: null, tc: null, r: null, auto: true});
+    }
+    found.sort((x, y) => x.t - y.t);
+    await Promise.all(found.map(async m => { try { const o = await fsFetch1x2(m.id, m.ja, m.jb); if (o) { m.o = o; m.ot = Math.floor(Date.now() / 1000); } } catch(e) {} }));
+    list = found.filter(m => L.db[m.h] && L.db[m.a] && m.h !== m.a);
+    if (!found.length) err = 'Flashscore no devuelve partidos de ' + L.name + ' en los próximos 9 días.';
+    else if (!list.length) err = 'Flashscore devuelve partidos, pero ningún equipo coincide con la base: ' + found.map(m => m.h + ' – ' + m.a).join(', ');
+  } catch (e) {
+    err = 'No se pudo leer Flashscore (' + e.message + '). Revisa el puente en la pestaña de partidos.';
+  }
+  jorAuto[liga] = {t: Date.now(), list, err};
+  if (currentLiga === liga) {
+    if (!list.length) {
+      card.style.display = '';
+      document.getElementById('jor-list').innerHTML = '';
+      document.getElementById('jor-note').innerHTML = '<strong style="color:var(--wn)">' + escHTML(err) + '</strong>';
+    } else renderJornada();
+  }
 }
 function jorKey(liga, m) { return `${liga}|${m.h}|${m.a}|${new Date(m.t * 1000).toISOString().slice(0, 10)}`; }
 function jorFlags(liga, m) {
@@ -2641,6 +2686,11 @@ function renderJornada() {
   }).join('');
   const viejo = (Date.now() / 1000 - ts) > 4 * 86400;
   const note = document.getElementById('jor-note');
+  if (list.some(m => m.auto)) {
+    note.innerHTML = 'Partidos leídos de Flashscore ahora mismo (' + dias[new Date().getDay()] + ' ' + new Date().getDate() + '/' + (new Date().getMonth() + 1) + ' ' + pad(new Date().getHours()) + ':' + pad(new Date().getMinutes()) + '). 1X2 de Bet365 cuando Flashscore lo tiene. Lluvia y árbitro: no se leen solos, sin previsión hasta que los metas.';
+    note.style.borderLeftColor = '';
+    return;
+  }
   note.innerHTML = (LEAGUES[liga].warnTxt ? `<strong style="color:var(--wn)">${LEAGUES[liga].warnTxt}</strong><br>` : '') + `Cuotas 1X2 de Bet365 y previsión del tiempo tomadas el ${dias[dT.getDay()]} ${dT.getDate()}/${dT.getMonth() + 1} a las ${pad(dT.getHours())}:${pad(dT.getMinutes())}. La lluvia se aplica siempre, en proporción a la probabilidad de que caigan 2 mm o más durante el partido (51 escenarios del ECMWF): ×1,03 si es segura, ×1,015 si es del 50 %. El árbitro se aplica solo en cuanto Flashscore lo publica (suele ser la víspera). Pulsa <strong>Abrir</strong> para corregir algo o registrar la apuesta.` +
     (viejo ? ' <strong style="color:var(--wn)">⚠ Datos de hace más de 4 días: revisa el 1X2 a mano.</strong>' : '');
   note.style.borderLeftColor = viejo ? 'var(--wn)' : '';
