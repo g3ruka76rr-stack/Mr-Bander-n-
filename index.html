@@ -489,8 +489,10 @@ svg.pnl-chart text{fill:var(--tm);font-family:'JetBrains Mono',monospace;}
         </div>
       </div>
 
+      <div id="over-big" style="margin:8px 0;padding:14px;border-radius:10px;font-size:22px;font-weight:700;text-align:center;background:#8881">Analiza para ver la señal</div>
       <div class="sg">
         <div class="sc"><div class="sl">Predicción total</div><div class="sv" id="st-pred">—</div></div>
+        <div class="sc"><div class="sl">Previsión casa (Bet365)</div><div class="sv" id="st-house">—</div></div>
         <div class="sc"><div class="sl">λ restante</div><div class="sv" id="st-lam">—</div></div>
         <div class="sc"><div class="sl">Cuota justa Over</div><div class="sv" id="st-fo">—</div></div>
         <div class="sc"><div class="sl">Cuota justa Under</div><div class="sv" id="st-fu">—</div></div>
@@ -2598,7 +2600,16 @@ function jorEvalRaw(liga, m, v) {
   const stake = M.side !== 'N' ? Math.min(5, Math.max(1, Math.round(banca * 0.25 * (M.edgeCol / 100) / (M.bestOdd - 1)))) : 0;
   return {M, ok, linea, oO, oU, F, has1x2, stake, typed: [v.l, v.o, v.u].some(x => x !== undefined && x !== '')};
 }
-function jorResHTML(R) {
+// v62 · señal automática bajo cada partido: previsión del modelo frente a la de la casa (λ mercado), sin botones
+function jorSignalHTML(R) {
+  const M = R.M, nf = x => x.toFixed(1).replace('.', ','), mod = M.pmfMean;   // prepartido: córners ya vistos = 0
+  if (!R.ok || M.lamMkt == null) return `<div style="font-size:18px;font-weight:700;padding:8px 10px;border-radius:8px;margin:6px 0;background:#8881">Modelo ${nf(mod)} córners · mete línea y cuotas Over y Under para ver la casa</div>`;
+  const casa = M.lamMkt, d = mod - casa;
+  if (d > 0) return `<div style="font-size:20px;font-weight:700;padding:10px;border-radius:8px;margin:6px 0;background:#1a8a3a;color:#fff">🟢 OVER · modelo ${nf(mod)} &gt; casa ${nf(casa)} (+${nf(d)})</div>`;
+  return `<div style="font-size:18px;font-weight:700;padding:10px;border-radius:8px;margin:6px 0;background:#8881">Sin señal over · modelo ${nf(mod)} ≤ casa ${nf(casa)} (${nf(d)})</div>`;
+}
+function jorResHTML(R) { return jorSignalHTML(R) + jorResHTML0(R); }
+function jorResHTML0(R) {
   const M = R.M, f1 = x => (x >= 0 ? '+' : '') + x.toFixed(1).replace('.', ',') + ' %';
   if (!R.ok) return `<span style="color:var(--tm);font-weight:400">${R.typed ? 'Completa línea (múltiplo de 0,25) y las dos cuotas' : 'Teclea la línea y las cuotas de córners'}</span>`;
   if (M.side !== 'N') return `<span style="color:var(--win)">${M.side === 'O' ? 'OVER' : 'UNDER'} ${R.linea} @ ${M.bestOdd} · edge ${f1(M.bestEV)} · nivel ${M.lvl} · ${R.stake} €</span>`;
@@ -2863,6 +2874,12 @@ function analyze(mode) {
     qualEl.textContent = activeQual.length
       ? `×${M.qEff.toFixed(3)}  ·  ${activeQual.map(f=>f.lbl.split('(')[0].trim()).join(', ')}` : 'Ninguno';
     qualEl.style.color = M.qEff!==1 ? 'var(--wn)' : '';
+    document.getElementById('st-house').textContent = M.lamMkt===null ? '—' : (M.ht + M.lamMkt).toFixed(1);
+    { const big = document.getElementById('over-big');
+      if (M.lamMkt===null) { big.style.background='#8881'; big.style.color=''; big.textContent = 'Mete línea y cuotas Over y Under de Bet365 para ver la señal'; }
+      else { const mod = M.ht + M.pmfMean, casa = M.ht + M.lamMkt, d = mod - casa;
+        if (d > 0) { big.style.background='#1a8a3a'; big.style.color='#fff'; big.textContent = '🟢 OVER · modelo ' + mod.toFixed(1) + ' > casa ' + casa.toFixed(1) + ' (+' + d.toFixed(1) + ')'; }
+        else { big.style.background='#8881'; big.style.color=''; big.textContent = 'Sin señal over · modelo ' + mod.toFixed(1) + ' ≤ casa ' + casa.toFixed(1) + ' (' + d.toFixed(1) + ')'; } } }
     document.getElementById('d-mkt').textContent = !M.hasOdds ? (stale ? 'Cuotas caducadas' : 'Sin cuotas') : M.lamMkt===null ? 'Mercado ya decidido' : `λ ${M.lamMkt.toFixed(3)} · margen Bet365 ${M.margin.toFixed(2)}%`;
     document.getElementById('d-blend').textContent = M.lamMkt===null ? `100% modelo = ${M.lam.toFixed(2)}`
       : ALPHA === 1 ? `100% modelo = ${M.lam.toFixed(2)} · Bet365 (sólo comparación) ${M.lamMkt.toFixed(2)} · colchón ${M.col.toFixed(3)} → valor si EV ≥ +${M.thr.toFixed(1)}%`
